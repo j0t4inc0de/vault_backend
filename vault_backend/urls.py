@@ -18,13 +18,13 @@ from django.contrib import admin
 from django.urls import path, include
 from rest_framework_simplejwt.views import (
     TokenObtainPairView, TokenRefreshView)
-from cuentas.views import RegisterView
+from cuentas.views import RegisterView, EmailTokenObtainPairView
 
 urlpatterns = [
     path("admin/", admin.site.urls),
     path("api/", include("cuentas.urls")),
 
-    path("api/auth/login/", TokenObtainPairView.as_view()),
+    path("api/auth/login/", EmailTokenObtainPairView.as_view()),
     path("api/auth/refresh/", TokenRefreshView.as_view()),
     path('api/auth/register/', RegisterView.as_view(), name='auth_register'),
 ]

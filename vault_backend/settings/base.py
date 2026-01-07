@@ -75,3 +75,9 @@ ROOT_URLCONF = "vault_backend.urls"
 
 STATIC_URL = "/static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
+
+AUTHENTICATION_BACKENDS = [
+    'cuentas.backends.EmailBackend',  # Nuestro login por correo
+    # El login normal (por seguridad)
+    'django.contrib.auth.backends.ModelBackend',
+]

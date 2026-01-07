@@ -1,14 +1,19 @@
 # cuentas/views.py
 
 from rest_framework import viewsets, generics, filters
-from rest_framework.permissions import IsAuthenticated, AllowAny  # Importar AllowAny
+from rest_framework.permissions import IsAuthenticated, AllowAny
+from rest_framework_simplejwt.views import TokenObtainPairView
+from .serializers import EmailTokenObtainPairSerializer
 from .models import Account
 # Importar el nuevo serializador
 from .serializers import AccountSerializer, RegisterSerializer
 from django.contrib.auth.models import User
-
 from django.core.mail import send_mail
 from django.conf import settings
+
+
+class EmailTokenObtainPairView(TokenObtainPairView):
+    serializer_class = EmailTokenObtainPairSerializer
 
 
 class AccountViewSet(viewsets.ModelViewSet):

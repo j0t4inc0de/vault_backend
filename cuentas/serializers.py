@@ -1,6 +1,8 @@
 # cuentas/serializers.py
 
 from rest_framework import serializers
+from rest_framework.validators import UniqueValidator
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from django.contrib.auth.models import User
 from .models import Account
 from core.utils import encrypt_text, decrypt_text
@@ -51,6 +53,12 @@ class AccountSerializer(serializers.ModelSerializer):
 
 
 class RegisterSerializer(serializers.ModelSerializer):
+    # Agregamos la validación de email único aquí
+    email = serializers.EmailField(
+        required=True,
+        validators=[UniqueValidator(
+            queryset=User.objects.all(), message="Este correo ya está registrado.")]
+    )
     password = serializers.CharField(write_only=True)
 
     class Meta:
@@ -58,10 +66,17 @@ class RegisterSerializer(serializers.ModelSerializer):
         fields = ('username', 'password', 'email')
 
     def create(self, validated_data):
-        # create_user se encarga de hashear la contraseña automáticamente
         user = User.objects.create_user(
             username=validated_data['username'],
             password=validated_data['password'],
-            email=validated_data.get('email', '')
+            email=validated_data['email']
         )
         return user
+
+
+class EmailTokenObtainPairSerializer(TokenObtainPairSerializer):
+    def validate(self, attrs):
+        # Mapeamos el campo 'email' que viene del frontend al campo 'username'
+        # que espera Django internamente
+        attrs['username'] = attrs.get('email')
+        return super().validate(attrs)
