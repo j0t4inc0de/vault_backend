@@ -75,8 +75,14 @@ class RegisterSerializer(serializers.ModelSerializer):
 
 
 class EmailTokenObtainPairSerializer(TokenObtainPairSerializer):
+    email = serializers.EmailField()
+    password = serializers.CharField()
+
     def validate(self, attrs):
-        # Mapeamos el campo 'email' que viene del frontend al campo 'username'
-        # que espera Django internamente
-        attrs['username'] = attrs.get('email')
+        email_ingresado = attrs.get('email')
+
+        if email_ingresado:
+            attrs['username'] = email_ingresado
+
+        # 4. Llamamos a la validación original de la librería
         return super().validate(attrs)
