@@ -7,37 +7,45 @@ from core.utils import encrypt_text, decrypt_text
 
 
 class AccountSerializer(serializers.ModelSerializer):
-    # Creamos un campo "falso" para recibir la contraseña sin encriptar del usuario
+    # Campos de escritura (lo que envía el usuario)
     password = serializers.CharField(write_only=True, required=False)
+    secret = serializers.CharField(
+        write_only=True, required=False)  # <--- NUEVO
 
-    # Creamos un campo para devolver la contraseña desencriptada al leer
+    # Campos de lectura (lo que devolvemos)
     decrypted_password = serializers.SerializerMethodField()
+    decrypted_secret = serializers.SerializerMethodField()  # <--- NUEVO
 
     class Meta:
         model = Account
-        # Excluimos user (seguridad) y password_encrypted (porque lo manejamos internamente)
-        exclude = ("user", "password_encrypted")
+        # Excluimos los campos internos de encriptación y el usuario
+        exclude = ("user", "password_encrypted", "secret_encrypted")
 
     def get_decrypted_password(self, obj):
-        # Cuando el frontend pide los datos, desencriptamos al vuelo
         return decrypt_text(obj.password_encrypted)
 
-    def create(self, validated_data):
-        # Sacamos la contraseña plana del formulario
-        password_raw = validated_data.pop('password', None)
+    def get_decrypted_secret(self, obj):  # <--- NUEVO
+        return decrypt_text(obj.secret_encrypted)
 
-        # Si nos dieron una contraseña, la encriptamos antes de guardar
+    def create(self, validated_data):
+        password_raw = validated_data.pop('password', None)
+        secret_raw = validated_data.pop('secret', None)  # <--- NUEVO
+
         if password_raw:
             validated_data['password_encrypted'] = encrypt_text(password_raw)
+        if secret_raw:  # <--- NUEVO
+            validated_data['secret_encrypted'] = encrypt_text(secret_raw)
 
         return super().create(validated_data)
 
     def update(self, instance, validated_data):
-        # Lo mismo para cuando actualizamos una cuenta
         password_raw = validated_data.pop('password', None)
+        secret_raw = validated_data.pop('secret', None)  # <--- NUEVO
 
         if password_raw:
             validated_data['password_encrypted'] = encrypt_text(password_raw)
+        if secret_raw:  # <--- NUEVO
+            validated_data['secret_encrypted'] = encrypt_text(secret_raw)
 
         return super().update(instance, validated_data)
 
