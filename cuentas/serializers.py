@@ -75,14 +75,21 @@ class RegisterSerializer(serializers.ModelSerializer):
 
 
 class EmailTokenObtainPairSerializer(TokenObtainPairSerializer):
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if 'username' in self.fields:
+            del self.fields['username']
+
     email = serializers.EmailField()
     password = serializers.CharField()
 
     def validate(self, attrs):
         email_ingresado = attrs.get('email')
+        password_ingresado = attrs.get('password')
 
         if email_ingresado:
             attrs['username'] = email_ingresado
 
-        # 4. Llamamos a la validación original de la librería
+        # 3. Dejamos que el padre haga la autenticación mágica
         return super().validate(attrs)
