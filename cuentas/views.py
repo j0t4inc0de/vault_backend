@@ -44,7 +44,7 @@ class RegisterView(generics.CreateAPIView):
 
 Bienvenido a Niun.
 Ya tienes tu cuenta lista para guardar contraseñas, notas y recordatorios.
-Niun olvido, niun problema.
+Ni un olvido, ni un problema.
 
 Atentamente,
 Juan Erices.
