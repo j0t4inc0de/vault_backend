@@ -1,29 +1,38 @@
-name: Deploy Niun Docker
+version: '3.8'
 
-on:
-  push:
-    branches: [ "main" ]
+services:
+  web:
+    container_name: niun-web
+    build: .
+    restart: always
+    command: gunicorn --bind 0.0.0.0:8000 vault_backend.wsgi:application
+    volumes:
+      - .:/app
+    ports:
+      - "8090:8000"
+    env_file:
+      - .env
+    depends_on:
+      - db
+    networks:
+      - niun-network
 
-jobs:
-  deploy:
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v4
+  db:
+    container_name: niun-db
+    image: postgres:15
+    restart: always
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_DB=vault_db
+      - POSTGRES_USER=vault_user
+      - POSTGRES_PASSWORD=tu_password_seguro_db
+    networks:
+      - niun-network
 
-    - name: Deploy to VPS
-      uses: appleboy/ssh-action@master
-      with:
-        host: ${{ secrets.VPS_HOST }}
-        username: ${{ secrets.VPS_USER }}
-        key: ${{ secrets.VPS_SSH_KEY }}
-        script: |
-          cd /opt/vault_backend
-          
-          git config --global --add safe.directory /opt/vault_backend
-          git pull origin main
-          
-          docker compose up --build -d
-          
-          docker compose exec -T web python manage.py migrate
-          
-          docker compose exec -T web python manage.py collectstatic --noinput
+networks:
+  niun-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
