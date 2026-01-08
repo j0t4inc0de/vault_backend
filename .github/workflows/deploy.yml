@@ -1,4 +1,4 @@
-name: Deploy Niun Backend Opt
+name: Deploy Niun Docker
 
 on:
   push:
@@ -8,32 +8,22 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+    - uses: actions/checkout@v4
 
-      - name: Deploy to VPS
-        uses: appleboy/ssh-action@master
-        with:
-          host: ${{ secrets.VPS_HOST }}
-          username: ${{ secrets.VPS_USER }}
-          key: ${{ secrets.VPS_SSH_KEY }}
-          script: |
-            # 1. Ir a la carpeta del proyecto
-            cd /opt/vault_backend
-            
-            # 2. Configuración de seguridad de git (por si acaso)
-            git config --global --add safe.directory /opt/vault_backend
-            
-            # 3. Descargar los últimos cambios
-            git pull origin main
-            
-            # 4. Activar entorno y actualizar librerías
-            source venv/bin/activate
-            pip install -r requirements.txt
-            
-            # 5. Comandos de Django (Base de datos y Estáticos)
-            export DJANGO_SETTINGS_MODULE=vault_backend.settings.prod
-            python manage.py migrate
-            python manage.py collectstatic --noinput
-            
-            # 6. Reiniciar el servicio de Django
-            systemctl restart niun
+    - name: Deploy to VPS
+      uses: appleboy/ssh-action@master
+      with:
+        host: ${{ secrets.VPS_HOST }}
+        username: ${{ secrets.VPS_USER }}
+        key: ${{ secrets.VPS_SSH_KEY }}
+        script: |
+          cd /opt/vault_backend
+          
+          git config --global --add safe.directory /opt/vault_backend
+          git pull origin main
+          
+          docker compose up --build -d
+          
+          docker compose exec -T web python manage.py migrate
+          
+          docker compose exec -T web python manage.py collectstatic --noinput
