@@ -4,8 +4,37 @@ from rest_framework import serializers
 from rest_framework.validators import UniqueValidator
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from django.contrib.auth.models import User
+from django.db.models import Sum
 from .models import Account
 from core.utils import encrypt_text, decrypt_text
+from .models import VaultFile
+
+
+class VaultFileSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = VaultFile
+        fields = ['id', 'name', 'file', 'size_bytes', 'created_at']
+        read_only_fields = ['size_bytes', 'created_at']
+
+    def validate_file(self, value):
+        user = self.context['request'].user
+        profile = user.profile
+
+        # 1. Calcular límite total del usuario en Bytes
+        # (Base del plan + Extras comprados) * 1GB (1024^3 bytes)
+        total_limit_gb = profile.plan.limite_gb_base + profile.extra_gb_almacenamiento
+        total_limit_bytes = total_limit_gb * 1024 * 1024 * 1024
+
+        # 2. Calcular cuánto lleva usado
+        used_bytes = VaultFile.objects.filter(user=user).aggregate(
+            Sum('size_bytes'))['size_bytes__sum'] or 0
+
+        # 3. Validar si el nuevo archivo cabe
+        if (used_bytes + value.size) > total_limit_bytes:
+            raise serializers.ValidationError(
+                f"Espacio insuficiente. Tienes {total_limit_gb}GB y estás intentando superar el límite.")
+
+        return value
 
 
 class AccountSerializer(serializers.ModelSerializer):

@@ -3,13 +3,28 @@
 from rest_framework import viewsets, generics, filters
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework_simplejwt.views import TokenObtainPairView
-from .serializers import EmailTokenObtainPairSerializer
-from .models import Account
+from rest_framework.parsers import MultiPartParser, FormParser
+from .serializers import EmailTokenObtainPairSerializer, VaultFileSerializer
+from .models import Account, VaultFile
 from .serializers import AccountSerializer, RegisterSerializer
 from django.contrib.auth.models import User
 from django.core.mail import send_mail
 from django.conf import settings
 from .permissions import IsAccountOwnerAndWithinLimit
+
+
+class VaultFileViewSet(viewsets.ModelViewSet):
+    # Podrías agregar el permiso de 'Freezing' aquí también si quieres bloquear subidas a morosos
+    permission_classes = [IsAuthenticated]
+    serializer_class = VaultFileSerializer
+    # Necesario para subir archivos
+    parser_classes = (MultiPartParser, FormParser)
+
+    def get_queryset(self):
+        return VaultFile.objects.filter(user=self.request.user).order_by('-created_at')
+
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)
 
 
 class EmailTokenObtainPairView(TokenObtainPairView):

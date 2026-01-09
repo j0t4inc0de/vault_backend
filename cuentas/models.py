@@ -1,6 +1,26 @@
 import uuid
 from django.db import models
 from django.contrib.auth.models import User
+import os
+
+
+class VaultFile(models.Model):
+    user = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name="files")
+    file = models.FileField(upload_to="vault/%Y/%m/")
+    name = models.CharField(max_length=255)
+    # Guardamos el peso para sumar rápido
+    size_bytes = models.BigIntegerField(editable=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def save(self, *args, **kwargs):
+        # Auto-guardar el tamaño del archivo al crearlo
+        if self.file and not self.size_bytes:
+            self.size_bytes = self.file.size
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return self.name
 
 
 class PlanConfig(models.Model):
