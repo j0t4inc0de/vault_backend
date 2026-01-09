@@ -19,6 +19,72 @@ import mercadopago
 import traceback
 
 
+class UserProfileView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+        profile = user.profile
+
+        # 1. Calcular Cuentas (Slots)
+        cuentas_usadas = Account.objects.filter(user=user).count()
+
+        # 2. Calcular Almacenamiento
+        # Sumamos el tamaño real de los archivos subidos (en bytes)
+        archivos = VaultFile.objects.filter(user=user)
+        total_bytes = 0
+        for archivo in archivos:
+            try:
+                if archivo.file:
+                    total_bytes += archivo.file.size
+            except Exception:
+                pass  # Si un archivo falla, seguimos sumando el resto
+
+        # Convertimos a MB para facilitar la vida al Frontend
+        usado_mb = round(total_bytes / (1024 * 1024), 2)
+
+        # Calculamos el % de almacenamiento (evitando división por cero)
+        total_gb_permitidos = profile.total_almacenamiento_gb
+        total_mb_permitidos = total_gb_permitidos * 1024
+        porcentaje_storage = 0
+        if total_mb_permitidos > 0:
+            porcentaje_storage = round(
+                (usado_mb / total_mb_permitidos) * 100, 1)
+
+        return Response({
+            "usuario": {
+                "username": user.username,
+                "email": user.email,
+                "fecha_unio": user.date_joined.strftime("%Y-%m-%d"),
+            },
+            "plan": {
+                "nombre": profile.plan.nombre if profile.plan else "Plan Gratuito",
+                "es_premium": profile.plan.sin_anuncios if profile.plan else False,
+            },
+            "limites": {
+                "cuentas": {
+                    "usadas": cuentas_usadas,
+                    "total": profile.total_cuentas_permitidas,
+                    "restantes": profile.total_cuentas_permitidas - cuentas_usadas
+                },
+                "almacenamiento": {
+                    "usado_mb": usado_mb,
+                    "total_gb": total_gb_permitidos,
+                    "porcentaje": porcentaje_storage
+                },
+                "notas": {
+                    "total": profile.total_notas_permitidas
+                    # Podrías agregar "usadas" si creas un modelo de Notas a futuro
+                }
+            },
+            "gamificacion": {
+                "anuncios_vistos": profile.total_anuncios_vistos,
+                # 3/10 para el siguiente slot
+                "progreso_recompensa": profile.total_anuncios_vistos % 10,
+            }
+        })
+
+
 class CreatePaymentView(APIView):
     permission_classes = [IsAuthenticated]
 
