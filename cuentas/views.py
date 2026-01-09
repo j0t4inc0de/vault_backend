@@ -14,6 +14,46 @@ from django.contrib.auth.models import User
 from django.core.mail import send_mail
 from django.conf import settings
 from django.utils import timezone
+from core.utils import encrypt_text, decrypt_text
+
+
+class SecurityView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        profile = request.user.profile
+        return Response({
+            "configurada": bool(profile.pregunta_seguridad),
+            "pregunta": profile.pregunta_seguridad
+        })
+
+    def put(self, request):
+        pregunta = request.data.get('pregunta')
+        respuesta = request.data.get('respuesta')
+
+        if not pregunta or not respuesta:
+            return Response({"error": "Faltan datos"}, status=400)
+
+        profile = request.user.profile
+        profile.pregunta_seguridad = pregunta
+        profile.respuesta_seguridad = encrypt_text(respuesta)
+        profile.save()
+
+        return Response({"mensaje": "Seguridad configurada correctamente."})
+
+    def post(self, request):
+        respuesta_usuario = request.data.get('respuesta', '')
+        profile = request.user.profile
+
+        if not profile.respuesta_seguridad:
+            return Response({"error": "No hay seguridad configurada"}, status=400)
+
+        respuesta_real = decrypt_text(profile.respuesta_seguridad)
+
+        if respuesta_real and respuesta_real.lower().strip() == respuesta_usuario.lower().strip():
+            return Response({"verificado": True})
+
+        return Response({"error": "Respuesta incorrecta"}, status=401)
 
 
 class AdRewardView(APIView):
