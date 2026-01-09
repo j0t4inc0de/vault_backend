@@ -1,16 +1,51 @@
 # cuentas/views.py
 
 from rest_framework import viewsets, generics, filters
+from rest_framework.views import APIView
+from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework.parsers import MultiPartParser, FormParser
 from .serializers import EmailTokenObtainPairSerializer, VaultFileSerializer
 from .models import Account, VaultFile
 from .serializers import AccountSerializer, RegisterSerializer
+from .permissions import IsAccountOwnerAndWithinLimit
 from django.contrib.auth.models import User
 from django.core.mail import send_mail
 from django.conf import settings
-from .permissions import IsAccountOwnerAndWithinLimit
+from django.utils import timezone
+
+
+class AdRewardView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        profile = request.user.profile
+        ahora = timezone.now()
+
+        if profile.ultima_vez_anuncio and profile.ultima_vez_anuncio.date() != ahora.date():
+            profile.anuncios_vistos_hoy = 0
+
+        # Actualizar métricas
+        profile.ultima_vez_anuncio = ahora
+        profile.anuncios_vistos_hoy += 1
+        profile.total_anuncios_vistos += 1
+
+        # Verificar recompensa (Cada 10 anuncios totales = 1 slot)
+        # Nota: Usamos módulo % 10 == 0 para que ocurra en el 10, 20, 30...
+        gano_recompensa = False
+        if profile.total_anuncios_vistos % 10 == 0:
+            profile.extra_slots_cuentas += 1
+            gano_recompensa = True
+
+        profile.save()
+
+        return Response({
+            "mensaje": "Anuncio registrado correctamente",
+            "recompensa_obtenida": gano_recompensa,
+            "progreso_para_siguiente": profile.total_anuncios_vistos % 10,
+            "total_slots": profile.total_cuentas_permitidas
+        })
 
 
 class VaultFileViewSet(viewsets.ModelViewSet):
