@@ -17,80 +17,105 @@ from django.conf import settings
 from django.utils import timezone
 from core.utils import encrypt_text, decrypt_text
 import mercadopago
+import traceback
 
 
 class CreatePaymentView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
-        plan_id = request.data.get('plan_id')
-        pack_id = request.data.get('pack_id')
+        try:
+            # 1. Recibimos qué quiere comprar el usuario
+            plan_id = request.data.get('plan_id')
+            pack_id = request.data.get('pack_id')
 
-        product_title = ""
-        product_price = 0
-        purchase_type = ""  # 'plan' o 'pack'
-        product_db_id = None
+            product_title = ""
+            product_price = 0
+            purchase_type = ""
+            product_db_id = None
 
-        if plan_id:
-            # Lógica para PLANES (Suscripción)
-            try:
-                item = PlanConfig.objects.get(id=plan_id)
-                product_title = f"Suscripción {item.nombre}"
-                product_price = float(item.precio_mensual)
-                purchase_type = "plan"
-                product_db_id = item.id
-            except PlanConfig.DoesNotExist:
-                return Response({"error": "Plan no encontrado"}, status=404)
-        
-        elif pack_id:
-            # Lógica para PACKS (Pago único)
-            try:
-                item = PackConfig.objects.get(id=pack_id)
-                product_title = f"Pack {item.nombre}"
-                product_price = float(item.precio)
-                purchase_type = "pack"
-                product_db_id = item.id
-            except PackConfig.DoesNotExist:
-                return Response({"error": "Pack no encontrado"}, status=404)
-        
-        else:
-            return Response({"error": "Debes enviar 'plan_id' o 'pack_id'"}, status=400)
+            if plan_id:
+                try:
+                    item = PlanConfig.objects.get(id=plan_id)
+                    product_title = f"Suscripción {item.nombre}"
+                    product_price = float(item.precio_mensual)
+                    purchase_type = "plan"
+                    product_db_id = item.id
+                except PlanConfig.DoesNotExist:
+                    return Response({"error": "Plan no encontrado"}, status=404)
+            
+            elif pack_id:
+                try:
+                    item = PackConfig.objects.get(id=pack_id)
+                    product_title = f"Pack {item.nombre}"
+                    product_price = float(item.precio)
+                    purchase_type = "pack"
+                    product_db_id = item.id
+                except PackConfig.DoesNotExist:
+                    return Response({"error": "Pack no encontrado"}, status=404)
+            
+            else:
+                return Response({"error": "Debes enviar 'plan_id' o 'pack_id'"}, status=400)
 
-        # 2. Configurar MercadoPago
-        sdk = mercadopago.SDK(settings.MERCADOPAGO_ACCESS_TOKEN)
+            # 2. Configurar MercadoPago
+            # Verificamos que el token exista antes de usarlo
+            if not getattr(settings, 'MERCADOPAGO_ACCESS_TOKEN', None):
+                 raise Exception("La variable MERCADOPAGO_ACCESS_TOKEN no está configurada en settings.")
 
-        preference_data = {
-            "items": [
-                {
-                    "id": str(product_db_id),
-                    "title": product_title,
-                    "quantity": 1,
-                    "currency_id": "CLP",
-                    "unit_price": product_price
-                }
-            ],
-            # 3. METADATA: Aquí guardamos qué es, para saberlo cuando llegue el Webhook
-            "metadata": {
-                "user_id": request.user.id,
-                "type": purchase_type,    # 'plan' o 'pack'
-                "product_id": product_db_id
-            },
-            "notification_url": "http://72.60.167.16:8090/api/webhook/mercado-pago/",
-            "back_urls": {
-                "success": "http://localhost:5173/payment/success",
-                "failure": "http://localhost:5173/payment/failure",
-                "pending": "http://localhost:5173/payment/pending"
-            },
-            "auto_return": "approved"
-        }
+            sdk = mercadopago.SDK(settings.MERCADOPAGO_ACCESS_TOKEN)
 
-        preference_response = sdk.preference().create(preference_data)
-        preference = preference_response["response"]
+            preference_data = {
+                "items": [
+                    {
+                        "id": str(product_db_id),
+                        "title": product_title,
+                        "quantity": 1,
+                        "currency_id": "CLP",
+                        "unit_price": product_price
+                    }
+                ],
+                "metadata": {
+                    "user_id": request.user.id,
+                    "type": purchase_type,
+                    "product_id": product_db_id
+                },
+                "notification_url": "http://72.60.167.16:8090/api/webhook/mercado-pago/",
+                "back_urls": {
+                    "success": "http://localhost:5173/payment/success",
+                    "failure": "http://localhost:5173/payment/failure",
+                    "pending": "http://localhost:5173/payment/pending"
+                },
+                "auto_return": "approved"
+            }
 
-        return Response({
-            "init_point": preference["init_point"],
-            "preference_id": preference["id"]
-        })
+            # 3. Creamos la preferencia y verificamos la respuesta de MP
+            print(f"Enviando a MercadoPago: {preference_data}") # Debug en log
+            preference_response = sdk.preference().create(preference_data)
+            
+            # Verificamos si MercadoPago devolvió error
+            if preference_response["status"] != 201:
+                 print(f"Error de MercadoPago: {preference_response}")
+                 return Response({
+                     "error": "Error al crear preferencia en MercadoPago", 
+                     "detalle": preference_response
+                 }, status=400)
+
+            preference = preference_response["response"]
+
+            return Response({
+                "init_point": preference["init_point"],
+                "preference_id": preference["id"]
+            })
+
+        except Exception as e:
+            # ESTA ES LA PARTE MÁGICA:
+            # Imprime el error en los logs
+            traceback.print_exc()
+            # Y también te lo devuelve en Postman para que lo leas
+            return Response({
+                "error_interno": str(e),
+                "tipo_error": type(e).__name__
+            }, status=500)
 
 
 class MercadoPagoWebhookView(APIView):
