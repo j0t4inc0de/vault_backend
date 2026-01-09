@@ -7,10 +7,9 @@ from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework.parsers import MultiPartParser, FormParser
 from .serializers import EmailTokenObtainPairSerializer, VaultFileSerializer
-from .models import Account, VaultFile
+from .models import Account, VaultFile, PlanConfig, PackConfig
 from .serializers import AccountSerializer, RegisterSerializer
 from .permissions import IsAccountOwnerAndWithinLimit
-from .models import PlanConfig, PackConfig
 from django.contrib.auth.models import User
 from django.core.mail import send_mail
 from django.conf import settings
@@ -121,20 +120,72 @@ class CreatePaymentView(APIView):
 
 class MercadoPagoWebhookView(APIView):
     permission_classes = [AllowAny]
-    authentication_classes = []  # <--- Importante: Elimina la necesidad de Token
+    authentication_classes = []  # No requerimos token, MP es quien llama
 
     def post(self, request):
-        print("\n🔔 === NOTIFICACIÓN DE MERCADOPAGO RECIBIDA === 🔔")
-
         topic = request.data.get('topic') or request.data.get('type')
         mp_id = request.data.get('data', {}).get('id')
 
-        print(f"Tipo (topic): {topic}")
-        print(f"ID del recurso: {mp_id}")
-        print("Data completa:", request.data)
-        print("==================================================\n")
+        print(f"\n🔔 Notificación MP: {topic} | ID: {mp_id}")
+
+        if topic == 'payment' and mp_id:
+            try:
+                # 1. Consultar a MP el estado real del pago
+                sdk = mercadopago.SDK(settings.MERCADOPAGO_ACCESS_TOKEN)
+                payment_info = sdk.payment().get(mp_id)
+                payment = payment_info.get('response', {})
+
+                status = payment.get('status')
+
+                if status == 'approved':
+                    # 2. Leer la metadata que guardamos al crear el pago
+                    metadata = payment.get('metadata', {})
+                    user_id = metadata.get('user_id')
+                    purchase_type = metadata.get(
+                        'type')       # 'plan' o 'pack'
+                    product_id = metadata.get('product_id')
+
+                    print(
+                        f"✅ Pago Aprobado. Usuario: {user_id}, Tipo: {purchase_type}, Producto: {product_id}")
+
+                    # 3. Procesar la entrega del producto
+                    if user_id and purchase_type and product_id:
+                        self.activar_producto(
+                            user_id, purchase_type, product_id)
+
+                else:
+                    print(f"⚠️ Pago no aprobado. Estado: {status}")
+
+            except Exception as e:
+                print(f"❌ Error procesando webhook: {e}")
 
         return Response({"status": "recibido"}, status=200)
+
+    def activar_producto(self, user_id, tipo, product_id):
+        try:
+            user = User.objects.get(id=user_id)
+            profile = user.profile  # Accedemos al perfil (OneToOne)
+
+            if tipo == 'plan':
+                # CAMBIO DE PLAN (Suscripción)
+                plan = PlanConfig.objects.get(id=product_id)
+                profile.plan = plan
+                print(f"🚀 Plan actualizado a: {plan.nombre}")
+
+            elif tipo == 'pack':
+                # COMPRA DE PACK (Acumulativo)
+                pack = PackConfig.objects.get(id=product_id)
+                profile.extra_slots_cuentas += pack.extra_slots_cuentas
+                profile.extra_gb_almacenamiento += pack.extra_gb
+                profile.extra_slots_notas += pack.extra_notas
+                profile.extra_slots_recordatorios += pack.extra_recordatorios
+                print(
+                    f"📦 Pack aplicado: +{pack.extra_slots_cuentas} slots, +{pack.extra_gb}GB")
+
+            profile.save()
+
+        except Exception as e:
+            print(f"❌ Error activando producto en DB: {e}")
 
 
 class SecurityView(APIView):
