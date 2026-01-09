@@ -10,11 +10,88 @@ from .serializers import EmailTokenObtainPairSerializer, VaultFileSerializer
 from .models import Account, VaultFile
 from .serializers import AccountSerializer, RegisterSerializer
 from .permissions import IsAccountOwnerAndWithinLimit
+from .models import PlanConfig, PackConfig
 from django.contrib.auth.models import User
 from django.core.mail import send_mail
 from django.conf import settings
 from django.utils import timezone
 from core.utils import encrypt_text, decrypt_text
+import mercadopago
+
+
+class CreatePaymentView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        plan_id = request.data.get('plan_id')
+        pack_id = request.data.get('pack_id')
+
+        product_title = ""
+        product_price = 0
+        purchase_type = ""  # 'plan' o 'pack'
+        product_db_id = None
+
+        if plan_id:
+            # Lógica para PLANES (Suscripción)
+            try:
+                item = PlanConfig.objects.get(id=plan_id)
+                product_title = f"Suscripción {item.nombre}"
+                product_price = float(item.precio_mensual)
+                purchase_type = "plan"
+                product_db_id = item.id
+            except PlanConfig.DoesNotExist:
+                return Response({"error": "Plan no encontrado"}, status=404)
+        
+        elif pack_id:
+            # Lógica para PACKS (Pago único)
+            try:
+                item = PackConfig.objects.get(id=pack_id)
+                product_title = f"Pack {item.nombre}"
+                product_price = float(item.precio)
+                purchase_type = "pack"
+                product_db_id = item.id
+            except PackConfig.DoesNotExist:
+                return Response({"error": "Pack no encontrado"}, status=404)
+        
+        else:
+            return Response({"error": "Debes enviar 'plan_id' o 'pack_id'"}, status=400)
+
+        # 2. Configurar MercadoPago
+        sdk = mercadopago.SDK(settings.MERCADOPAGO_ACCESS_TOKEN)
+
+        preference_data = {
+            "items": [
+                {
+                    "id": str(product_db_id),
+                    "title": product_title,
+                    "quantity": 1,
+                    "currency_id": "CLP",
+                    "unit_price": product_price
+                }
+            ],
+            # 3. METADATA: Aquí guardamos qué es, para saberlo cuando llegue el Webhook
+            "metadata": {
+                "user_id": request.user.id,
+                "type": purchase_type,    # 'plan' o 'pack'
+                "product_id": product_db_id
+            },
+            "notification_url": "http://72.60.167.16:8090/api/webhook/mercado-pago/",
+            "back_urls": {
+                "success": "http://localhost:5173/payment/success",
+                "failure": "http://localhost:5173/payment/failure",
+                "pending": "http://localhost:5173/payment/pending"
+            },
+            "auto_return": "approved"
+        }
+
+        preference_response = sdk.preference().create(preference_data)
+        preference = preference_response["response"]
+
+        return Response({
+            "init_point": preference["init_point"],
+            "preference_id": preference["id"]
+        })
+
 
 class MercadoPagoWebhookView(APIView):
     permission_classes = [AllowAny]
@@ -22,16 +99,17 @@ class MercadoPagoWebhookView(APIView):
 
     def post(self, request):
         print("\n🔔 === NOTIFICACIÓN DE MERCADOPAGO RECIBIDA === 🔔")
-        
+
         topic = request.data.get('topic') or request.data.get('type')
         mp_id = request.data.get('data', {}).get('id')
-        
+
         print(f"Tipo (topic): {topic}")
         print(f"ID del recurso: {mp_id}")
         print("Data completa:", request.data)
         print("==================================================\n")
 
         return Response({"status": "recibido"}, status=200)
+
 
 class SecurityView(APIView):
     permission_classes = [IsAuthenticated]
