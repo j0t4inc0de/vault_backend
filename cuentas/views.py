@@ -43,7 +43,7 @@ class CreatePaymentView(APIView):
                     product_db_id = item.id
                 except PlanConfig.DoesNotExist:
                     return Response({"error": "Plan no encontrado"}, status=404)
-            
+
             elif pack_id:
                 try:
                     item = PackConfig.objects.get(id=pack_id)
@@ -53,14 +53,15 @@ class CreatePaymentView(APIView):
                     product_db_id = item.id
                 except PackConfig.DoesNotExist:
                     return Response({"error": "Pack no encontrado"}, status=404)
-            
+
             else:
                 return Response({"error": "Debes enviar 'plan_id' o 'pack_id'"}, status=400)
 
             # 2. Configurar MercadoPago
             # Verificamos que el token exista antes de usarlo
             if not getattr(settings, 'MERCADOPAGO_ACCESS_TOKEN', None):
-                 raise Exception("La variable MERCADOPAGO_ACCESS_TOKEN no está configurada en settings.")
+                raise Exception(
+                    "La variable MERCADOPAGO_ACCESS_TOKEN no está configurada en settings.")
 
             sdk = mercadopago.SDK(settings.MERCADOPAGO_ACCESS_TOKEN)
 
@@ -81,24 +82,24 @@ class CreatePaymentView(APIView):
                 },
                 "notification_url": "http://72.60.167.16:8090/api/webhook/mercado-pago/",
                 "back_urls": {
-                    "success": "http://localhost:5173/payment/success",
-                    "failure": "http://localhost:5173/payment/failure",
-                    "pending": "http://localhost:5173/payment/pending"
+                    "success": "https://www.google.com/search?q=pago_exitoso",
+                    "failure": "https://www.google.com/search?q=pago_fallado",
+                    "pending": "https://www.google.com/search?q=pago_pendiente"
                 },
                 "auto_return": "approved"
             }
 
             # 3. Creamos la preferencia y verificamos la respuesta de MP
-            print(f"Enviando a MercadoPago: {preference_data}") # Debug en log
+            print(f"Enviando a MercadoPago: {preference_data}")  # Debug en log
             preference_response = sdk.preference().create(preference_data)
-            
+
             # Verificamos si MercadoPago devolvió error
             if preference_response["status"] != 201:
-                 print(f"Error de MercadoPago: {preference_response}")
-                 return Response({
-                     "error": "Error al crear preferencia en MercadoPago", 
-                     "detalle": preference_response
-                 }, status=400)
+                print(f"Error de MercadoPago: {preference_response}")
+                return Response({
+                    "error": "Error al crear preferencia en MercadoPago",
+                    "detalle": preference_response
+                }, status=400)
 
             preference = preference_response["response"]
 
