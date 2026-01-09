@@ -16,6 +16,22 @@ from django.conf import settings
 from django.utils import timezone
 from core.utils import encrypt_text, decrypt_text
 
+class MercadoPagoWebhookView(APIView):
+    permission_classes = [AllowAny]
+    authentication_classes = []  # <--- Importante: Elimina la necesidad de Token
+
+    def post(self, request):
+        print("\n🔔 === NOTIFICACIÓN DE MERCADOPAGO RECIBIDA === 🔔")
+        
+        topic = request.data.get('topic') or request.data.get('type')
+        mp_id = request.data.get('data', {}).get('id')
+        
+        print(f"Tipo (topic): {topic}")
+        print(f"ID del recurso: {mp_id}")
+        print("Data completa:", request.data)
+        print("==================================================\n")
+
+        return Response({"status": "recibido"}, status=200)
 
 class SecurityView(APIView):
     permission_classes = [IsAuthenticated]
