@@ -24,13 +24,18 @@ class UserProfileView(APIView):
 
     def get(self, request):
         user = request.user
+
+        # Si el usuario no tiene perfil (ej: Superuser), lo creamos al vuelo
+        if not hasattr(user, 'profile'):
+            from .models import Profile
+            Profile.objects.create(user=user)
+
         profile = user.profile
 
-        # 1. Calcular Cuentas (Slots)
+        # Calcular Cuentas
         cuentas_usadas = Account.objects.filter(user=user).count()
 
-        # 2. Calcular Almacenamiento
-        # Sumamos el tamaño real de los archivos subidos (en bytes)
+        # Calcular Almacenamiento (Bytes reales)
         archivos = VaultFile.objects.filter(user=user)
         total_bytes = 0
         for archivo in archivos:
@@ -38,18 +43,29 @@ class UserProfileView(APIView):
                 if archivo.file:
                     total_bytes += archivo.file.size
             except Exception:
-                pass  # Si un archivo falla, seguimos sumando el resto
+                pass  # Si el archivo físico no está, no crasheamos
 
-        # Convertimos a MB para facilitar la vida al Frontend
         usado_mb = round(total_bytes / (1024 * 1024), 2)
 
-        # Calculamos el % de almacenamiento (evitando división por cero)
-        total_gb_permitidos = profile.total_almacenamiento_gb
+        # Obtener límites de forma segura (usando getattr por si el modelo falla)
+        # OJO: Aseguramos que si profile.plan es None, no falle
+        total_gb_permitidos = getattr(profile, 'total_almacenamiento_gb', 0)
+        total_cuentas_permitidas = getattr(
+            profile, 'total_cuentas_permitidas', 10)
+
+        # Calcular Porcentaje (Evitar división por cero)
         total_mb_permitidos = total_gb_permitidos * 1024
         porcentaje_storage = 0
         if total_mb_permitidos > 0:
             porcentaje_storage = round(
                 (usado_mb / total_mb_permitidos) * 100, 1)
+
+        # Datos seguros del Plan
+        nombre_plan = "Plan Gratuito"
+        es_premium = False
+        if profile.plan:
+            nombre_plan = profile.plan.nombre
+            es_premium = profile.plan.sin_anuncios
 
         return Response({
             "usuario": {
@@ -58,14 +74,14 @@ class UserProfileView(APIView):
                 "fecha_unio": user.date_joined.strftime("%Y-%m-%d"),
             },
             "plan": {
-                "nombre": profile.plan.nombre if profile.plan else "Plan Gratuito",
-                "es_premium": profile.plan.sin_anuncios if profile.plan else False,
+                "nombre": nombre_plan,
+                "es_premium": es_premium,
             },
             "limites": {
                 "cuentas": {
                     "usadas": cuentas_usadas,
-                    "total": profile.total_cuentas_permitidas,
-                    "restantes": profile.total_cuentas_permitidas - cuentas_usadas
+                    "total": total_cuentas_permitidas,
+                    "restantes": max(0, total_cuentas_permitidas - cuentas_usadas)
                 },
                 "almacenamiento": {
                     "usado_mb": usado_mb,
@@ -73,13 +89,11 @@ class UserProfileView(APIView):
                     "porcentaje": porcentaje_storage
                 },
                 "notas": {
-                    "total": profile.total_notas_permitidas
-                    # Podrías agregar "usadas" si creas un modelo de Notas a futuro
+                    "total": getattr(profile, 'total_notas_permitidas', 0)
                 }
             },
             "gamificacion": {
                 "anuncios_vistos": profile.total_anuncios_vistos,
-                # 3/10 para el siguiente slot
                 "progreso_recompensa": profile.total_anuncios_vistos % 10,
             }
         })
