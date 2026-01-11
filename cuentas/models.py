@@ -1,8 +1,47 @@
 import uuid
 from django.db import models
 from django.contrib.auth.models import User
+from django.utils import timezone
 import os
 
+class Anuncio(models.Model):
+    OPCIONES_TIPO = [
+        ('info', 'Información'),
+        ('promo', 'Promoción / Pack'),
+        ('alerta', 'Alerta / Pánico'),
+    ]
+
+    titulo = models.CharField(max_length=150)
+    mensaje = models.TextField(help_text="Puedes usar saltos de línea.")
+    creado_en = models.DateTimeField(auto_now_add=True)
+    expira_en = models.DateTimeField(help_text="Fecha y hora en que dejará de mostrarse el anuncio.")
+    tipo = models.CharField(max_length=20, choices=OPCIONES_TIPO, default='info')
+    activo = models.BooleanField(default=True, help_text="Desactívalo manualmente si quieres ocultarlo antes de tiempo.")
+
+    class Meta:
+        ordering = ['-creado_en']
+        verbose_name = "📢 Anuncio de Sistema"
+        verbose_name_plural = "📢 Anuncios de Sistema"
+
+    def __str__(self):
+        return f"{self.titulo} (Expira: {self.expira_en})"
+
+class Anuncio(models.Model):
+    titulo = models.CharField(max_length=150)
+    mensaje = models.TextField()
+    creado_en = models.DateTimeField(auto_now_add=True)
+    expira_en = models.DateTimeField()
+    tipo = models.CharField(
+        max_length=20, 
+        choices=[('info', 'Información'), ('promo', 'Promoción'), ('alerta', 'Alerta')],
+        default='info'
+    )
+
+    class Meta:
+        ordering = ['-creado_en']
+
+    def __str__(self):
+        return f"{self.titulo} (Expira: {self.expira_en})"
 
 class VaultFile(models.Model):
     user = models.ForeignKey(

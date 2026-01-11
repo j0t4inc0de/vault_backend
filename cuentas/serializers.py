@@ -7,7 +7,13 @@ from django.contrib.auth.models import User
 from django.db.models import Sum
 from .models import Account
 from core.utils import encrypt_text, decrypt_text
-from .models import VaultFile
+from .models import VaultFile, Anuncio
+
+
+class AnuncioSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Anuncio
+        fields = ['id', 'titulo', 'mensaje', 'creado_en', 'expira_en', 'tipo']
 
 
 class VaultFileSerializer(serializers.ModelSerializer):

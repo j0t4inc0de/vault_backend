@@ -6,8 +6,8 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework.parsers import MultiPartParser, FormParser
-from .serializers import EmailTokenObtainPairSerializer, VaultFileSerializer
-from .models import Account, VaultFile, PlanConfig, PackConfig
+from .serializers import EmailTokenObtainPairSerializer, VaultFileSerializer, AnuncioSerializer
+from .models import Account, VaultFile, PlanConfig, PackConfig, Anuncio
 from .serializers import AccountSerializer, RegisterSerializer
 from .permissions import IsAccountOwnerAndWithinLimit
 from django.contrib.auth.models import User
@@ -17,6 +17,20 @@ from django.utils import timezone
 from core.utils import encrypt_text, decrypt_text
 import mercadopago
 import traceback
+
+
+class AnuncioListView(generics.ListAPIView):
+    serializer_class = AnuncioSerializer
+    # O AllowAny si quieres que se vean en el login
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        ahora = timezone.now()
+        # Filtramos: Que esté activo Y que la fecha de expiración sea mayor a 'ahora'
+        return Anuncio.objects.filter(
+            activo=True,
+            expira_en__gte=ahora
+        ).order_by('-creado_en')
 
 
 class UserProfileView(APIView):

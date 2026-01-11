@@ -1,8 +1,13 @@
 from django.contrib import admin
 from django.db.models import Sum, Count
 from django.utils.timezone import now
-from .models import Account, Profile, PlanConfig, PackConfig
+from .models import Account, Profile, PlanConfig, PackConfig, Anuncio
 
+@admin.register(Anuncio)
+class AnuncioAdmin(admin.ModelAdmin):
+    list_display = ('titulo', 'tipo', 'creado_en', 'expira_en', 'activo')
+    list_filter = ('tipo', 'activo', 'expira_en')
+    search_fields = ('titulo', 'mensaje')
 
 @admin.register(PlanConfig)
 class PlanConfigAdmin(admin.ModelAdmin):
