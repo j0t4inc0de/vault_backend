@@ -31,9 +31,9 @@ class UserProfileView(APIView):
 
         profile = user.profile
 
-        # Valores por defecto (Plan Gratuito / Sin Plan)
-        total_gb_permitidos = 0
-        total_cuentas_permitidas = 10
+        # Valores por defecto
+        base_gb = 0
+        base_cuentas = 10
         nombre_plan = "Plan Gratuito"
         es_premium = False
 
@@ -41,34 +41,24 @@ class UserProfileView(APIView):
             nombre_plan = profile.plan.nombre
             es_premium = profile.plan.sin_anuncios
 
-            print("\n" + "="*50)
-            print(f"PLAN DETECTADO: {nombre_plan}")
-            print(f"ID del Plan: {profile.plan.id}")
-            print(f"Diccionario completo del plan: {profile.plan.__dict__}")
-            print("="*50 + "\n")
-            # --------------------------------
-            # Busca campos comunes: 'almacenamiento_gb', 'storage_gb', 'capacidad'
-            total_gb_permitidos = getattr(profile.plan, 'almacenamiento_gb', 0)
-            if total_gb_permitidos == 0:
-                total_gb_permitidos = getattr(profile.plan, 'storage', 0)
+            # --- 🚀 CORRECCIÓN: USAMOS LOS NOMBRES REALES DEL LOG ---
+            base_gb = getattr(profile.plan, 'limite_gb_base', 0)
+            base_cuentas = getattr(profile.plan, 'slots_cuentas_base', 10)
 
-            # Si te salía 9999 es que este campo sí existe o se llama 'cantidad_cuentas'
-            total_cuentas_permitidas = getattr(
-                profile.plan, 'cantidad_cuentas', 10)
-            if total_cuentas_permitidas == 10 and es_premium:
-                # Fallback si es premium y no encuentra el campo
-                total_cuentas_permitidas = 9999
+        # --- SUMAMOS LOS EXTRAS (Packs comprados) ---
+        total_gb = base_gb + getattr(profile, 'extra_gb_almacenamiento', 0)
+        total_cuentas = base_cuentas + \
+            getattr(profile, 'extra_slots_cuentas', 0)
 
         # --- CÁLCULO DE USO ---
         cuentas_usadas = Account.objects.filter(user=user).count()
 
-        # Calcular espacio usado real
         archivos = VaultFile.objects.filter(user=user)
         total_bytes = sum(a.file.size for a in archivos if a.file)
         usado_mb = round(total_bytes / (1024 * 1024), 2)
 
         # Calcular porcentaje
-        total_mb_permitidos = total_gb_permitidos * 1024
+        total_mb_permitidos = total_gb * 1024
         porcentaje_storage = 0
         if total_mb_permitidos > 0:
             porcentaje_storage = round(
@@ -87,17 +77,18 @@ class UserProfileView(APIView):
             "limites": {
                 "cuentas": {
                     "usadas": cuentas_usadas,
-                    "total": total_cuentas_permitidas,
-                    # Evitamos números negativos
-                    "restantes": max(0, total_cuentas_permitidas - cuentas_usadas)
+                    "total": total_cuentas,
+                    "restantes": max(0, total_cuentas - cuentas_usadas)
                 },
                 "almacenamiento": {
                     "usado_mb": usado_mb,
-                    "total_gb": total_gb_permitidos,  # Ahora sí debería salir el valor del plan
+                    # Ahora saldrá "5.0" (o más si tienes extras)
+                    "total_gb": total_gb,
                     "porcentaje": porcentaje_storage
                 },
                 "notas": {
-                    "total": getattr(profile.plan, 'notas_max', 50) if profile.plan else 10
+                    # También vi este nombre en tu log: 'slots_notas_base'
+                    "total": getattr(profile.plan, 'slots_notas_base', 10) if profile.plan else 10
                 }
             },
             "gamificacion": {
