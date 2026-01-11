@@ -22,81 +22,84 @@ import traceback
 class UserProfileView(APIView):
     permission_classes = [IsAuthenticated]
 
-    def get(self, request):
-        user = request.user
 
-        # Si el usuario no tiene perfil (ej: Superuser), lo creamos al vuelo
-        if not hasattr(user, 'profile'):
-            from .models import Profile
-            Profile.objects.create(user=user)
+def get(self, request):
+    user = request.user
 
-        profile = user.profile
+    if not hasattr(user, 'profile'):
+        from .models import Profile
+        Profile.objects.create(user=user)
 
-        # Calcular Cuentas
-        cuentas_usadas = Account.objects.filter(user=user).count()
+    profile = user.profile
 
-        # Calcular Almacenamiento (Bytes reales)
-        archivos = VaultFile.objects.filter(user=user)
-        total_bytes = 0
-        for archivo in archivos:
-            try:
-                if archivo.file:
-                    total_bytes += archivo.file.size
-            except Exception:
-                pass  # Si el archivo físico no está, no crasheamos
 
-        usado_mb = round(total_bytes / (1024 * 1024), 2)
+    # Valores por defecto (Plan Gratuito / Sin Plan)
+    total_gb_permitidos = 0
+    total_cuentas_permitidas = 10
+    nombre_plan = "Plan Gratuito"
+    es_premium = False
 
-        # Obtener límites de forma segura (usando getattr por si el modelo falla)
-        # OJO: Aseguramos que si profile.plan es None, no falle
-        total_gb_permitidos = getattr(profile, 'total_almacenamiento_gb', 0)
+    if profile.plan:
+        nombre_plan = profile.plan.nombre
+        es_premium = profile.plan.sin_anuncios
+
+        # Busca campos comunes: 'almacenamiento_gb', 'storage_gb', 'capacidad'
+        total_gb_permitidos = getattr(profile.plan, 'almacenamiento_gb', 0)
+        if total_gb_permitidos == 0:
+            total_gb_permitidos = getattr(profile.plan, 'storage', 0)
+
+        # Si te salía 9999 es que este campo sí existe o se llama 'cantidad_cuentas'
         total_cuentas_permitidas = getattr(
-            profile, 'total_cuentas_permitidas', 10)
+            profile.plan, 'cantidad_cuentas', 10)
+        if total_cuentas_permitidas == 10 and es_premium:
+            # Fallback si es premium y no encuentra el campo
+            total_cuentas_permitidas = 9999
 
-        # Calcular Porcentaje (Evitar división por cero)
-        total_mb_permitidos = total_gb_permitidos * 1024
-        porcentaje_storage = 0
-        if total_mb_permitidos > 0:
-            porcentaje_storage = round(
-                (usado_mb / total_mb_permitidos) * 100, 1)
+    # --- CÁLCULO DE USO ---
+    cuentas_usadas = Account.objects.filter(user=user).count()
 
-        # Datos seguros del Plan
-        nombre_plan = "Plan Gratuito"
-        es_premium = False
-        if profile.plan:
-            nombre_plan = profile.plan.nombre
-            es_premium = profile.plan.sin_anuncios
+    # Calcular espacio usado real
+    archivos = VaultFile.objects.filter(user=user)
+    total_bytes = sum(a.file.size for a in archivos if a.file)
+    usado_mb = round(total_bytes / (1024 * 1024), 2)
 
-        return Response({
-            "usuario": {
-                "username": user.username,
-                "email": user.email,
-                "fecha_unio": user.date_joined.strftime("%Y-%m-%d"),
+    # Calcular porcentaje
+    total_mb_permitidos = total_gb_permitidos * 1024
+    porcentaje_storage = 0
+    if total_mb_permitidos > 0:
+        porcentaje_storage = round((usado_mb / total_mb_permitidos) * 100, 1)
+
+    return Response({
+        "usuario": {
+            "username": user.username,
+            "email": user.email,
+            "fecha_unio": user.date_joined.strftime("%Y-%m-%d"),
+        },
+        "plan": {
+            "nombre": nombre_plan,
+            "es_premium": es_premium,
+        },
+        "limites": {
+            "cuentas": {
+                "usadas": cuentas_usadas,
+                "total": total_cuentas_permitidas,
+                # Evitamos números negativos
+                "restantes": max(0, total_cuentas_permitidas - cuentas_usadas)
             },
-            "plan": {
-                "nombre": nombre_plan,
-                "es_premium": es_premium,
+            "almacenamiento": {
+                "usado_mb": usado_mb,
+                "total_gb": total_gb_permitidos,  # Ahora sí debería salir el valor del plan
+                "porcentaje": porcentaje_storage
             },
-            "limites": {
-                "cuentas": {
-                    "usadas": cuentas_usadas,
-                    "total": total_cuentas_permitidas,
-                    "restantes": max(0, total_cuentas_permitidas - cuentas_usadas)
-                },
-                "almacenamiento": {
-                    "usado_mb": usado_mb,
-                    "total_gb": total_gb_permitidos,
-                    "porcentaje": porcentaje_storage
-                },
-                "notas": {
-                    "total": getattr(profile, 'total_notas_permitidas', 0)
-                }
-            },
-            "gamificacion": {
-                "anuncios_vistos": profile.total_anuncios_vistos,
-                "progreso_recompensa": profile.total_anuncios_vistos % 10,
+            "notas": {
+                "total": getattr(profile.plan, 'notas_max', 50) if profile.plan else 10
             }
-        })
+        },
+        "gamificacion": {
+            "anuncios_vistos": profile.total_anuncios_vistos,
+            "progreso_recompensa": profile.total_anuncios_vistos % 10,
+        }
+    })
 
 
 class CreatePaymentView(APIView):
