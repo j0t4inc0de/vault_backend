@@ -41,6 +41,12 @@ class UserProfileView(APIView):
             nombre_plan = profile.plan.nombre
             es_premium = profile.plan.sin_anuncios
 
+            print("\n" + "="*50)
+            print(f"PLAN DETECTADO: {nombre_plan}")
+            print(f"ID del Plan: {profile.plan.id}")
+            print(f"Diccionario completo del plan: {profile.plan.__dict__}")
+            print("="*50 + "\n")
+            # --------------------------------
             # Busca campos comunes: 'almacenamiento_gb', 'storage_gb', 'capacidad'
             total_gb_permitidos = getattr(profile.plan, 'almacenamiento_gb', 0)
             if total_gb_permitidos == 0:
