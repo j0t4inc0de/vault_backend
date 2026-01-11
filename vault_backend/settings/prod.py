@@ -2,7 +2,10 @@
 from .base import *
 
 DEBUG = False
-VPS_IP = os.getenv("VPS_IP", "72.60.167.16")
+VPS_IP = os.getenv("VPS_IP")
+
+if not VPS_IP:
+    raise ValueError("Falta configurar la variable VPS_IP en el archivo .env")
 
 ALLOWED_HOSTS = [VPS_IP, 'localhost', '127.0.0.1']
 
