@@ -5,9 +5,11 @@ from .models import Account, Profile, PlanConfig, PackConfig, Anuncio
 
 @admin.register(Anuncio)
 class AnuncioAdmin(admin.ModelAdmin):
-    list_display = ('id', 'titulo', 'fecha_creacion') 
+    list_display = ('id', 'titulo', 'creado_en', 'activo') 
     
-    list_filter = ('fecha_creacion',)
+    list_filter = ('creado_en', 'activo') 
+    
+    search_fields = ('titulo', 'mensaje')
 
 @admin.register(PlanConfig)
 class PlanConfigAdmin(admin.ModelAdmin):
