@@ -7,10 +7,10 @@ router.register("cuentas", AccountViewSet, basename="cuentas")
 router.register("files", VaultFileViewSet, basename="files")
 
 urlpatterns = router.urls + [
+    path('profile/me/',
+         UserProfileView.as_view(), name='user-profile'),
     path('webhook/mercado-pago/',
          MercadoPagoWebhookView.as_view(), name='mp-webhook'),
     path('payment/create/',
          CreatePaymentView.as_view(), name='payment-create'),
-    path('profile/me/',
-         UserProfileView.as_view(), name='profile-me'),
 ]
