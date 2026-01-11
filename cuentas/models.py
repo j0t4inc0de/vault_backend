@@ -26,22 +26,6 @@ class Anuncio(models.Model):
     def __str__(self):
         return f"{self.titulo} (Expira: {self.expira_en})"
 
-class Anuncio(models.Model):
-    titulo = models.CharField(max_length=150)
-    mensaje = models.TextField()
-    creado_en = models.DateTimeField(auto_now_add=True)
-    expira_en = models.DateTimeField()
-    tipo = models.CharField(
-        max_length=20, 
-        choices=[('info', 'Información'), ('promo', 'Promoción'), ('alerta', 'Alerta')],
-        default='info'
-    )
-
-    class Meta:
-        ordering = ['-creado_en']
-
-    def __str__(self):
-        return f"{self.titulo} (Expira: {self.expira_en})"
 
 class VaultFile(models.Model):
     user = models.ForeignKey(
