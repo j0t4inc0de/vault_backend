@@ -22,84 +22,83 @@ import traceback
 class UserProfileView(APIView):
     permission_classes = [IsAuthenticated]
 
+    def get(self, request):
+        user = request.user
 
-def get(self, request):
-    user = request.user
+        if not hasattr(user, 'profile'):
+            from .models import Profile
+            Profile.objects.create(user=user)
 
-    if not hasattr(user, 'profile'):
-        from .models import Profile
-        Profile.objects.create(user=user)
+        profile = user.profile
 
-    profile = user.profile
+        # Valores por defecto (Plan Gratuito / Sin Plan)
+        total_gb_permitidos = 0
+        total_cuentas_permitidas = 10
+        nombre_plan = "Plan Gratuito"
+        es_premium = False
 
+        if profile.plan:
+            nombre_plan = profile.plan.nombre
+            es_premium = profile.plan.sin_anuncios
 
-    # Valores por defecto (Plan Gratuito / Sin Plan)
-    total_gb_permitidos = 0
-    total_cuentas_permitidas = 10
-    nombre_plan = "Plan Gratuito"
-    es_premium = False
+            # Busca campos comunes: 'almacenamiento_gb', 'storage_gb', 'capacidad'
+            total_gb_permitidos = getattr(profile.plan, 'almacenamiento_gb', 0)
+            if total_gb_permitidos == 0:
+                total_gb_permitidos = getattr(profile.plan, 'storage', 0)
 
-    if profile.plan:
-        nombre_plan = profile.plan.nombre
-        es_premium = profile.plan.sin_anuncios
+            # Si te salía 9999 es que este campo sí existe o se llama 'cantidad_cuentas'
+            total_cuentas_permitidas = getattr(
+                profile.plan, 'cantidad_cuentas', 10)
+            if total_cuentas_permitidas == 10 and es_premium:
+                # Fallback si es premium y no encuentra el campo
+                total_cuentas_permitidas = 9999
 
-        # Busca campos comunes: 'almacenamiento_gb', 'storage_gb', 'capacidad'
-        total_gb_permitidos = getattr(profile.plan, 'almacenamiento_gb', 0)
-        if total_gb_permitidos == 0:
-            total_gb_permitidos = getattr(profile.plan, 'storage', 0)
+        # --- CÁLCULO DE USO ---
+        cuentas_usadas = Account.objects.filter(user=user).count()
 
-        # Si te salía 9999 es que este campo sí existe o se llama 'cantidad_cuentas'
-        total_cuentas_permitidas = getattr(
-            profile.plan, 'cantidad_cuentas', 10)
-        if total_cuentas_permitidas == 10 and es_premium:
-            # Fallback si es premium y no encuentra el campo
-            total_cuentas_permitidas = 9999
+        # Calcular espacio usado real
+        archivos = VaultFile.objects.filter(user=user)
+        total_bytes = sum(a.file.size for a in archivos if a.file)
+        usado_mb = round(total_bytes / (1024 * 1024), 2)
 
-    # --- CÁLCULO DE USO ---
-    cuentas_usadas = Account.objects.filter(user=user).count()
+        # Calcular porcentaje
+        total_mb_permitidos = total_gb_permitidos * 1024
+        porcentaje_storage = 0
+        if total_mb_permitidos > 0:
+            porcentaje_storage = round(
+                (usado_mb / total_mb_permitidos) * 100, 1)
 
-    # Calcular espacio usado real
-    archivos = VaultFile.objects.filter(user=user)
-    total_bytes = sum(a.file.size for a in archivos if a.file)
-    usado_mb = round(total_bytes / (1024 * 1024), 2)
-
-    # Calcular porcentaje
-    total_mb_permitidos = total_gb_permitidos * 1024
-    porcentaje_storage = 0
-    if total_mb_permitidos > 0:
-        porcentaje_storage = round((usado_mb / total_mb_permitidos) * 100, 1)
-
-    return Response({
-        "usuario": {
-            "username": user.username,
-            "email": user.email,
-            "fecha_unio": user.date_joined.strftime("%Y-%m-%d"),
-        },
-        "plan": {
-            "nombre": nombre_plan,
-            "es_premium": es_premium,
-        },
-        "limites": {
-            "cuentas": {
-                "usadas": cuentas_usadas,
-                "total": total_cuentas_permitidas,
-                # Evitamos números negativos
-                "restantes": max(0, total_cuentas_permitidas - cuentas_usadas)
+        return Response({
+            "usuario": {
+                "username": user.username,
+                "email": user.email,
+                "fecha_unio": user.date_joined.strftime("%Y-%m-%d"),
             },
-            "almacenamiento": {
-                "usado_mb": usado_mb,
-                "total_gb": total_gb_permitidos,  # Ahora sí debería salir el valor del plan
-                "porcentaje": porcentaje_storage
+            "plan": {
+                "nombre": nombre_plan,
+                "es_premium": es_premium,
             },
-            "notas": {
-                "total": getattr(profile.plan, 'notas_max', 50) if profile.plan else 10
+            "limites": {
+                "cuentas": {
+                    "usadas": cuentas_usadas,
+                    "total": total_cuentas_permitidas,
+                    # Evitamos números negativos
+                    "restantes": max(0, total_cuentas_permitidas - cuentas_usadas)
+                },
+                "almacenamiento": {
+                    "usado_mb": usado_mb,
+                    "total_gb": total_gb_permitidos,  # Ahora sí debería salir el valor del plan
+                    "porcentaje": porcentaje_storage
+                },
+                "notas": {
+                    "total": getattr(profile.plan, 'notas_max', 50) if profile.plan else 10
+                }
+            },
+            "gamificacion": {
+                "anuncios_vistos": profile.total_anuncios_vistos,
+                "progreso_recompensa": profile.total_anuncios_vistos % 10,
             }
-        },
-        "gamificacion": {
-            "anuncios_vistos": profile.total_anuncios_vistos,
-            "progreso_recompensa": profile.total_anuncios_vistos % 10,
-        }
-    })
+        })
 
 
 class CreatePaymentView(APIView):
