@@ -114,33 +114,36 @@ class RegisterSerializer(serializers.ModelSerializer):
         return value
 
     def create(self, validated_data):
-        with transaction.atomic():  # Si falla algo aquí, se deshace todo (no se crea el usuario)
+            with transaction.atomic():
+                # 1. Crear Usuario
+                user = User.objects.create_user(
+                    username=validated_data['username'],
+                    password=validated_data['password'],
+                    email=validated_data['email']
+                )
 
-            # 1. Crear Usuario
-            user = User.objects.create_user(
-                username=validated_data['username'],
-                password=validated_data['password'],
-                email=validated_data['email']
-            )
+                # 2. Preparar datos
+                pregunta = validated_data['pregunta_seguridad'].lower().strip()
+                
+                # Encriptar y asegurar que sea string (no bytes)
+                respuesta_enc = encrypt_text(validated_data['respuesta_seguridad'].lower().strip())
+                pin_enc = encrypt_text(validated_data['pin_boveda'])
+                
+                if isinstance(respuesta_enc, bytes): respuesta_enc = respuesta_enc.decode('utf-8')
+                if isinstance(pin_enc, bytes): pin_enc = pin_enc.decode('utf-8')
 
-            # 2. Preparar datos del perfil (Minúsculas)
-            pregunta = validated_data['pregunta_seguridad'].lower().strip()
-            respuesta = validated_data['respuesta_seguridad'].lower().strip()
-            pin = validated_data['pin_boveda']
-
-            # 3. Encriptar
-            respuesta_encriptada = encrypt_text(respuesta)
-            pin_encriptado = encrypt_text(pin)
-
-            # 4. Guardar Perfil
-            Profile.objects.create(
-                user=user,
-                pregunta_seguridad=pregunta,  # Guardamos la pregunta en plano pero minúscula
-                respuesta_seguridad=respuesta_encriptada,
-                pin_boveda=pin_encriptado
-            )
-
-            return user
+                # 3. Guardar Perfil (Usamos update_or_create para evitar duplicados)
+                # Esto busca un perfil existente del usuario. Si existe, lo actualiza. Si no, lo crea.
+                Profile.objects.update_or_create(
+                    user=user,
+                    defaults={
+                        'pregunta_seguridad': pregunta,
+                        'respuesta_seguridad': respuesta_enc,
+                        'pin_boveda': pin_enc
+                    }
+                )
+                
+                return user
 
 
 class EmailTokenObtainPairSerializer(TokenObtainPairSerializer):

@@ -1,7 +1,6 @@
 # vault_backend/settings/prod.py
 from .base import *
 
-DEBUG = False
 VPS_IP = os.getenv("VPS_IP")
 
 if not VPS_IP:
