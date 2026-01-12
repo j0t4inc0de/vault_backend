@@ -27,10 +27,11 @@ class AnuncioListView(generics.ListAPIView):
     def get_queryset(self):
         ahora = timezone.now()
         # Filtramos: Que esté activo Y que la fecha de expiración sea mayor a 'ahora'
-        return Anuncio.objects.filter(
-            activo=True,
-            expira_en__gte=ahora
-        ).order_by('-creado_en')
+        return Anuncio.objects.all()
+        # return Anuncio.objects.filter(
+        #     activo=True,
+        #     expira_en__gte=ahora
+        # ).order_by('-creado_en')
 
 
 class UserProfileView(APIView):
