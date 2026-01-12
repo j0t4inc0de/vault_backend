@@ -18,7 +18,7 @@ from django.contrib import admin
 from django.urls import path, include
 from rest_framework_simplejwt.views import (
     TokenObtainPairView, TokenRefreshView)
-from cuentas.views import RegisterView, EmailTokenObtainPairView, AdRewardView, SecurityView
+from cuentas.views import RegisterView, EmailTokenObtainPairView, AdRewardView, SecurityView, AnuncioListView
 
 urlpatterns = [
     path("admin/", admin.site.urls),
@@ -30,4 +30,5 @@ urlpatterns = [
     
     path('api/ads/reward/', AdRewardView.as_view(), name='ad-reward'),
     path('api/security/', SecurityView.as_view(), name='security-check'),
+    path('api/anuncios/', AnuncioListView.as_view(), name='anuncios-list'),
 ]
