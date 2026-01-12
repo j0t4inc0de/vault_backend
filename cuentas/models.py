@@ -2,7 +2,10 @@ import uuid
 from django.db import models
 from django.contrib.auth.models import User
 from django.utils import timezone
+from urllib.parse import urlparse
+
 import os
+
 
 class Anuncio(models.Model):
     OPCIONES_TIPO = [
@@ -14,9 +17,12 @@ class Anuncio(models.Model):
     titulo = models.CharField(max_length=150)
     mensaje = models.TextField(help_text="Puedes usar saltos de línea.")
     creado_en = models.DateTimeField(auto_now_add=True)
-    expira_en = models.DateTimeField(help_text="Fecha y hora en que dejará de mostrarse el anuncio.")
-    tipo = models.CharField(max_length=20, choices=OPCIONES_TIPO, default='info')
-    activo = models.BooleanField(default=True, help_text="Desactívalo manualmente si quieres ocultarlo antes de tiempo.")
+    expira_en = models.DateTimeField(
+        help_text="Fecha y hora en que dejará de mostrarse el anuncio.")
+    tipo = models.CharField(
+        max_length=20, choices=OPCIONES_TIPO, default='info')
+    activo = models.BooleanField(
+        default=True, help_text="Desactívalo manualmente si quieres ocultarlo antes de tiempo.")
 
     class Meta:
         ordering = ['-creado_en']
@@ -121,10 +127,33 @@ class Account(models.Model):
 
     site_url = models.URLField(blank=True, null=True)
     site_name = models.CharField(max_length=100, blank=True, null=True)
-    site_icon_url = models.URLField(blank=True, null=True)
-
+    site_icon_url = models.URLField(max_length=500, blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    def save(self, *args, **kwargs):
+        # Lógica: Si el usuario puso una URL del sitio, pero NO subió un icono propio
+        if self.site_url and not self.site_icon_url:
+            try:
+                # 1. Limpiamos la URL para obtener solo el dominio limpio
+                # Ej: "https://www.netflix.com/login" -> "www.netflix.com"
+                parsed = urlparse(self.site_url)
+
+                # Manejo robusto: Si el usuario puso "google.com" sin https://,
+                # urlparse lo pone en 'path', no en 'netloc'.
+                domain = parsed.netloc if parsed.netloc else parsed.path.split(
+                    '/')[0]
+
+                if domain:
+                    # 2. Generamos la URL del servicio de iconos de Google en HD (128px)
+                    self.site_icon_url = f"https://www.google.com/s2/favicons?domain={domain}&sz=128"
+
+            except Exception as e:
+                # Si algo falla, no rompemos el guardado, simplemente no ponemos icono
+                print(f"No se pudo generar el icono: {e}")
+
+        # Guardamos normalmente
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return f"{self.site_name or self.email}"
