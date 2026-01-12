@@ -25,9 +25,9 @@ class AnuncioListView(generics.ListAPIView):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        ahora = timezone.now()
-        # Filtramos: Que esté activo Y que la fecha de expiración sea mayor a 'ahora'
         return Anuncio.objects.all()
+        # ahora = timezone.now()
+        # # Filtramos: Que esté activo Y que la fecha de expiración sea mayor a 'ahora'
         # return Anuncio.objects.filter(
         #     activo=True,
         #     expira_en__gte=ahora
