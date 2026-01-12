@@ -2,12 +2,12 @@
 
 from rest_framework import serializers
 from rest_framework.validators import UniqueValidator
+from rest_framework.exceptions import ValidationError
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from django.contrib.auth.models import User
 from django.db.models import Sum
-from .models import Account
 from core.utils import encrypt_text, decrypt_text
-from .models import VaultFile, Anuncio
+from .models import VaultFile, Anuncio, Profile, Account
 
 
 class AnuncioSerializer(serializers.ModelSerializer):
@@ -46,7 +46,8 @@ class VaultFileSerializer(serializers.ModelSerializer):
 class AccountSerializer(serializers.ModelSerializer):
     # Campos de escritura (lo que envía el usuario)
     password = serializers.CharField(write_only=True, required=False)
-    secret = serializers.CharField(write_only=True, required=False, allow_blank=True, allow_null=True)
+    secret = serializers.CharField(
+        write_only=True, required=False, allow_blank=True, allow_null=True)
 
     # Campos de lectura (lo que devolvemos)
     decrypted_password = serializers.SerializerMethodField()
@@ -87,7 +88,6 @@ class AccountSerializer(serializers.ModelSerializer):
 
 
 class RegisterSerializer(serializers.ModelSerializer):
-    # Agregamos la validación de email único aquí
     email = serializers.EmailField(
         required=True,
         validators=[UniqueValidator(
@@ -95,9 +95,15 @@ class RegisterSerializer(serializers.ModelSerializer):
     )
     password = serializers.CharField(write_only=True)
 
+    pregunta_seguridad = serializers.CharField(required=True)
+    respuesta_seguridad = serializers.CharField(write_only=True, required=True)
+    pin_boveda = serializers.CharField(
+        write_only=True, required=True, min_length=4, max_length=8)
+
     class Meta:
         model = User
-        fields = ('username', 'password', 'email')
+        fields = ('username', 'password', 'email',
+                  'pregunta_seguridad', 'respuesta_seguridad', 'pin_boveda')
 
     def create(self, validated_data):
         user = User.objects.create_user(
@@ -105,11 +111,20 @@ class RegisterSerializer(serializers.ModelSerializer):
             password=validated_data['password'],
             email=validated_data['email']
         )
+
+        profile, created = Profile.objects.get_or_create(user=user)
+
+        profile.pregunta_seguridad = validated_data['pregunta_seguridad']
+        profile.respuesta_seguridad = encrypt_text(
+            validated_data['respuesta_seguridad'])
+        profile.pin_boveda = encrypt_text(validated_data['pin_boveda'])
+
+        profile.save()
+
         return user
 
 
 class EmailTokenObtainPairSerializer(TokenObtainPairSerializer):
-
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         if 'username' in self.fields:
@@ -117,13 +132,45 @@ class EmailTokenObtainPairSerializer(TokenObtainPairSerializer):
 
     email = serializers.EmailField()
     password = serializers.CharField()
+    security_answer = serializers.CharField(required=False, allow_blank=True)
 
     def validate(self, attrs):
         email_ingresado = attrs.get('email')
-        password_ingresado = attrs.get('password')
-
         if email_ingresado:
             attrs['username'] = email_ingresado
 
-        # 3. Dejamos que el padre haga la autenticación mágica
-        return super().validate(attrs)
+        try:
+            data = super().validate(attrs)
+        except Exception as e:
+            raise ValidationError({"detail": "Credenciales inválidas."})
+
+        user = self.user
+        try:
+            profile = user.profile
+        except Profile.DoesNotExist:
+            return data
+
+        respuesta_usuario = attrs.get('security_answer', '').strip()
+
+        try:
+            respuesta_real = decrypt_text(profile.respuesta_seguridad)
+        except:
+            return data
+
+        if not respuesta_usuario:
+            # CASO A: El usuario no envió respuesta, le devolvemos la pregunta.
+            raise ValidationError({
+                "code": "mfa_required",
+                "detail": "Se requiere respuesta de seguridad",
+                "question": profile.pregunta_seguridad
+            })
+
+        # CASO B: El usuario envió respuesta, comparamos (insensible a mayúsculas)
+        if respuesta_usuario.lower() != respuesta_real.lower():
+            raise ValidationError({
+                "code": "mfa_failed",
+                "detail": "La respuesta de seguridad es incorrecta."
+            })
+
+        # Si todo sale bien, devolvemos el token
+        return data
