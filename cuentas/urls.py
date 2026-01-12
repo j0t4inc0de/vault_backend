@@ -1,5 +1,5 @@
 from rest_framework.routers import DefaultRouter
-from .views import AccountViewSet, VaultFileViewSet, MercadoPagoWebhookView, CreatePaymentView, UserProfileView, AnuncioListView
+from .views import AccountViewSet, VaultFileViewSet, MercadoPagoWebhookView, CreatePaymentView, UserProfileView
 from django.urls import path
 
 router = DefaultRouter()
@@ -13,6 +13,4 @@ urlpatterns = router.urls + [
          MercadoPagoWebhookView.as_view(), name='mp-webhook'),
     path('payment/create/',
          CreatePaymentView.as_view(), name='payment-create'),
-    path('api/anuncios/', 
-         AnuncioListView.as_view(), name='anuncios-list'),
 ]

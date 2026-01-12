@@ -24,11 +24,17 @@ urlpatterns = [
     path("admin/", admin.site.urls),
     path("api/", include("cuentas.urls")),
 
-    path("api/auth/login/", EmailTokenObtainPairView.as_view()),
-    path("api/auth/refresh/", TokenRefreshView.as_view()),
-    path('api/auth/register/', RegisterView.as_view(), name='auth_register'),
+    path("api/auth/login/", 
+         EmailTokenObtainPairView.as_view()),
+    path("api/auth/refresh/", 
+         TokenRefreshView.as_view()),
+    path('api/auth/register/', 
+         RegisterView.as_view(), name='auth_register'),
     
-    path('api/ads/reward/', AdRewardView.as_view(), name='ad-reward'),
-    path('api/security/', SecurityView.as_view(), name='security-check'),
-    path('api/anuncios/', AnuncioListView.as_view(), name='anuncios-list'),
+    path('api/ads/reward/', 
+         AdRewardView.as_view(), name='ad-reward'),
+    path('api/security/', 
+         SecurityView.as_view(), name='security-check'),
+    path('api/anuncios/', 
+         AnuncioListView.as_view(), name='anuncios-list'),
 ]
