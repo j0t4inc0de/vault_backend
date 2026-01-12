@@ -46,8 +46,7 @@ class VaultFileSerializer(serializers.ModelSerializer):
 class AccountSerializer(serializers.ModelSerializer):
     # Campos de escritura (lo que envía el usuario)
     password = serializers.CharField(write_only=True, required=False)
-    secret = serializers.CharField(
-        write_only=True, required=False)  # <--- NUEVO
+    secret = serializers.CharField(write_only=True, required=False, allow_blank=True, allow_null=True)
 
     # Campos de lectura (lo que devolvemos)
     decrypted_password = serializers.SerializerMethodField()
