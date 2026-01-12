@@ -146,7 +146,7 @@ class Account(models.Model):
 
                 if domain:
                     # 2. Generamos la URL del servicio de iconos de Google en HD (128px)
-                    self.site_icon_url = f"https://www.google.com/s2/favicons?domain={domain}&sz=128"
+                    self.site_icon_url = f"https://icons.duckduckgo.com/ip3/{domain}.ico"
 
             except Exception as e:
                 # Si algo falla, no rompemos el guardado, simplemente no ponemos icono
