@@ -115,25 +115,20 @@ class RegisterSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
             with transaction.atomic():
-                # 1. Crear Usuario
                 user = User.objects.create_user(
                     username=validated_data['username'],
                     password=validated_data['password'],
                     email=validated_data['email']
                 )
 
-                # 2. Preparar datos
                 pregunta = validated_data['pregunta_seguridad'].lower().strip()
                 
-                # Encriptar y asegurar que sea string (no bytes)
                 respuesta_enc = encrypt_text(validated_data['respuesta_seguridad'].lower().strip())
                 pin_enc = encrypt_text(validated_data['pin_boveda'])
                 
                 if isinstance(respuesta_enc, bytes): respuesta_enc = respuesta_enc.decode('utf-8')
                 if isinstance(pin_enc, bytes): pin_enc = pin_enc.decode('utf-8')
 
-                # 3. Guardar Perfil (Usamos update_or_create para evitar duplicados)
-                # Esto busca un perfil existente del usuario. Si existe, lo actualiza. Si no, lo crea.
                 Profile.objects.update_or_create(
                     user=user,
                     defaults={
