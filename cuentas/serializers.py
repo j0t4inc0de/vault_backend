@@ -6,6 +6,7 @@ from rest_framework.exceptions import ValidationError
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from django.contrib.auth.models import User
 from django.db.models import Sum
+from django.db import transaction
 from core.utils import encrypt_text, decrypt_text
 from .models import VaultFile, Anuncio, Profile, Account
 
@@ -98,30 +99,48 @@ class RegisterSerializer(serializers.ModelSerializer):
     pregunta_seguridad = serializers.CharField(required=True)
     respuesta_seguridad = serializers.CharField(write_only=True, required=True)
     pin_boveda = serializers.CharField(
-        write_only=True, required=True, min_length=4, max_length=8)
+        write_only=True, required=True, min_length=4, max_length=4)
 
     class Meta:
         model = User
         fields = ('username', 'password', 'email',
                   'pregunta_seguridad', 'respuesta_seguridad', 'pin_boveda')
 
+    def validate_pin_boveda(self, value):
+        # Asegurarnos de que sean solo números
+        if not value.isdigit():
+            raise serializers.ValidationError(
+                "El PIN debe contener solo números.")
+        return value
+
     def create(self, validated_data):
-        user = User.objects.create_user(
-            username=validated_data['username'],
-            password=validated_data['password'],
-            email=validated_data['email']
-        )
+        with transaction.atomic():  # Si falla algo aquí, se deshace todo (no se crea el usuario)
 
-        profile, created = Profile.objects.get_or_create(user=user)
+            # 1. Crear Usuario
+            user = User.objects.create_user(
+                username=validated_data['username'],
+                password=validated_data['password'],
+                email=validated_data['email']
+            )
 
-        profile.pregunta_seguridad = validated_data['pregunta_seguridad']
-        profile.respuesta_seguridad = encrypt_text(
-            validated_data['respuesta_seguridad'])
-        profile.pin_boveda = encrypt_text(validated_data['pin_boveda'])
+            # 2. Preparar datos del perfil (Minúsculas)
+            pregunta = validated_data['pregunta_seguridad'].lower().strip()
+            respuesta = validated_data['respuesta_seguridad'].lower().strip()
+            pin = validated_data['pin_boveda']
 
-        profile.save()
+            # 3. Encriptar
+            respuesta_encriptada = encrypt_text(respuesta)
+            pin_encriptado = encrypt_text(pin)
 
-        return user
+            # 4. Guardar Perfil
+            Profile.objects.create(
+                user=user,
+                pregunta_seguridad=pregunta,  # Guardamos la pregunta en plano pero minúscula
+                respuesta_seguridad=respuesta_encriptada,
+                pin_boveda=pin_encriptado
+            )
+
+            return user
 
 
 class EmailTokenObtainPairSerializer(TokenObtainPairSerializer):
@@ -139,38 +158,44 @@ class EmailTokenObtainPairSerializer(TokenObtainPairSerializer):
         if email_ingresado:
             attrs['username'] = email_ingresado
 
+        # 1. Validar credenciales (Usuario y Password)
         try:
             data = super().validate(attrs)
-        except Exception as e:
+        except Exception:
             raise ValidationError({"detail": "Credenciales inválidas."})
 
+        # 2. Validar Pregunta de Seguridad
         user = self.user
         try:
             profile = user.profile
         except Profile.DoesNotExist:
-            return data
+            return data  # Si no tiene perfil (admin antiguo), lo dejamos pasar
 
-        respuesta_usuario = attrs.get('security_answer', '').strip()
+        # Normalizamos la respuesta del usuario a minúsculas
+        respuesta_usuario = attrs.get('security_answer', '').strip().lower()
 
         try:
+            # Desencriptamos la respuesta real
             respuesta_real = decrypt_text(profile.respuesta_seguridad)
+            # Aseguramos que la real también se compare en minúsculas (por si acaso)
+            if respuesta_real:
+                respuesta_real = respuesta_real.lower()
         except:
-            return data
+            return data  # Si falla desencriptar, dejamos pasar (fallback)
 
+        # 3. Lógica del Desafío
         if not respuesta_usuario:
-            # CASO A: El usuario no envió respuesta, le devolvemos la pregunta.
+            # Si no envió respuesta, le devolvemos la pregunta
             raise ValidationError({
                 "code": "mfa_required",
                 "detail": "Se requiere respuesta de seguridad",
-                "question": profile.pregunta_seguridad
+                "question": profile.pregunta_seguridad  # Ya está en minúsculas en la BD
             })
 
-        # CASO B: El usuario envió respuesta, comparamos (insensible a mayúsculas)
-        if respuesta_usuario.lower() != respuesta_real.lower():
+        if respuesta_usuario != respuesta_real:
             raise ValidationError({
                 "code": "mfa_failed",
                 "detail": "La respuesta de seguridad es incorrecta."
             })
 
-        # Si todo sale bien, devolvemos el token
         return data

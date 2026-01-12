@@ -88,12 +88,9 @@ class Profile(models.Model):
         PlanConfig, on_delete=models.SET_NULL, null=True, blank=True)
 
     # Seguridad
-    pregunta_seguridad = models.CharField(
-        max_length=255, null=True, blank=True)
-    respuesta_seguridad = models.CharField(
-        max_length=255, null=True, blank=True)
-    pin_boveda = models.CharField(
-        max_length=128, null=True, blank=True)  # Encriptado
+    pregunta_seguridad = models.TextField(null=True, blank=True)
+    respuesta_seguridad = models.TextField(null=True, blank=True)
+    pin_boveda = models.TextField(null=True, blank=True)
 
     # Acumuladores (Lo que compra o gana el usuario)
     extra_slots_cuentas = models.IntegerField(default=0)
