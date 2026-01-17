@@ -1,0 +1,27 @@
+{% extends "admin/change_list.html" %}
+{% block content_title %}
+    <h1>📊 Dashboard Niun - Panel de Control</h1>
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-bottom: 30px; background: #f8f9fa; padding: 20px; border-radius: 10px; border: 1px solid #dee2e6;">
+        <div style="text-align: center;">
+            <h3 style="margin:0; color: #666;">Usuarios Totales</h3>
+            <span style="font-size: 24px; font-weight: bold; color: #2c3e50;">{{ summary.total }}</span>
+        </div>
+        <div style="text-align: center;">
+            <h3 style="margin:0; color: #666;">Premium / Estandar</h3>
+            <span style="font-size: 24px; font-weight: bold; color: #27ae60;">{{ summary.premium }}</span> / <span style="font-size: 24px; font-weight: bold; color: #7f8c8d;">{{ summary.estandar }}</span>
+        </div>
+        <div style="text-align: center;">
+            <h3 style="margin:0; color: #666;">Nuevos (Este Mes)</h3>
+            <span style="font-size: 24px; font-weight: bold; color: #2980b9;">+{{ summary.nuevos }}</span>
+        </div>
+        <div style="text-align: center;">
+            <h3 style="margin:0; color: #666;">Anuncios Vistos</h3>
+            <span style="font-size: 24px; font-weight: bold; color: #f39c12;">{{ summary.ads }}</span>
+        </div>
+        <div style="text-align: center;">
+            <h3 style="margin:0; color: #666;">Ingresos Mensuales (MRR)</h3>
+            <span style="font-size: 24px; font-weight: bold; color: #c0392b;">{{ summary.ingresos }}</span>
+        </div>
+    </div>
+    {{ block.super }}
+{% endblock %}

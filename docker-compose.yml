@@ -1,0 +1,38 @@
+version: '3.8'
+
+services:
+  web:
+    container_name: niun-web
+    build: .
+    restart: always
+    command: gunicorn --bind 0.0.0.0:8000 vault_backend.wsgi:application
+    volumes:
+      - .:/app
+    ports:
+      - "8090:8000"
+    env_file:
+      - .env
+    depends_on:
+      - db
+    networks:
+      - niun-network
+
+  db:
+    container_name: niun-db
+    image: postgres:15
+    restart: always
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_DB=vault_db
+      - POSTGRES_USER=vault_user
+      - POSTGRES_PASSWORD=tu_password_seguro_db
+    networks:
+      - niun-network
+
+networks:
+  niun-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
