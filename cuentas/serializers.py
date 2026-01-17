@@ -151,7 +151,7 @@ class EmailTokenObtainPairSerializer(TokenObtainPairSerializer):
     
     email = serializers.EmailField()
     password = serializers.CharField()
-    security_answer = serializers.CharField(required=True)
+    security_answer = serializers.CharField(required=True) 
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -160,9 +160,7 @@ class EmailTokenObtainPairSerializer(TokenObtainPairSerializer):
     def validate(self, attrs):
         email = attrs.get('email')
         password = attrs.get('password')
-        # Normalizamos la respuesta del usuario (trim y minúsculas)
         security_answer = attrs.get('security_answer', '').strip().lower()
-
         try:
             user = User.objects.get(email=email)
             profile = user.profile
@@ -177,6 +175,7 @@ class EmailTokenObtainPairSerializer(TokenObtainPairSerializer):
 
             if profile.intentos_fallidos >= 10:
                 # --- PROTOCOLO DE AUTODESTRUCCIÓN ---
+                # Borramos al usuario, lo que borra en cascada perfil, archivos, etc.
                 user.delete()
                 raise AuthenticationFailed(
                     "Has excedido el límite de 10 intentos de seguridad. "
@@ -202,6 +201,7 @@ class EmailTokenObtainPairSerializer(TokenObtainPairSerializer):
             profile.intentos_fallidos = 0
             profile.save()
 
+        # Generamos los tokens manualmente
         refresh = self.get_token(user)
 
         return {
@@ -210,5 +210,6 @@ class EmailTokenObtainPairSerializer(TokenObtainPairSerializer):
             'user': {
                 'id': user.id,
                 'email': user.email,
+                'username': user.username
             }
         }
