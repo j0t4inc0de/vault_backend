@@ -11,6 +11,7 @@ from .models import Account, VaultFile, PlanConfig, PackConfig, Anuncio
 from .serializers import AccountSerializer, RegisterSerializer
 from .permissions import IsAccountOwnerAndWithinLimit
 from django.contrib.auth.models import User
+from django.contrib.auth.hashers import make_password, check_password
 from django.core.mail import send_mail
 from django.conf import settings
 from django.utils import timezone
@@ -288,38 +289,59 @@ class SecurityView(APIView):
     def get(self, request):
         profile = request.user.profile
         return Response({
-            "configurada": bool(profile.pregunta_seguridad),
-            "pregunta": profile.pregunta_seguridad
+            "pregunta": profile.pregunta_seguridad,
+            "tiene_pin": bool(profile.pin_boveda), # Solo decimos si existe o no
+            "intentos_fallidos": profile.intentos_fallidos
         })
 
     def put(self, request):
-        pregunta = request.data.get('pregunta')
-        respuesta = request.data.get('respuesta')
-
-        if not pregunta or not respuesta:
-            return Response({"error": "Faltan datos"}, status=400)
-
         profile = request.user.profile
-        profile.pregunta_seguridad = pregunta
-        profile.respuesta_seguridad = encrypt_text(respuesta)
-        profile.save()
+        data = request.data
 
-        return Response({"mensaje": "Seguridad configurada correctamente."})
+        if 'pregunta' in data and 'respuesta' in data:
+            profile.pregunta_seguridad = data['pregunta']
+            profile.respuesta_seguridad = make_password(data['respuesta'].strip().lower())
+
+        if 'pin_boveda' in data:
+            pin = data['pin_boveda']
+            if len(pin) < 4:
+                return Response({"error": "El PIN debe tener al menos 4 dígitos"}, status=400)
+            profile.pin_boveda = make_password(pin)
+
+        profile.save()
+        return Response({"mensaje": "Configuración de seguridad actualizada correctamente."})
 
     def post(self, request):
-        respuesta_usuario = request.data.get('respuesta', '')
+        pin_ingresado = request.data.get('pin_boveda')
         profile = request.user.profile
+        user = request.user
 
-        if not profile.respuesta_seguridad:
-            return Response({"error": "No hay seguridad configurada"}, status=400)
+        if not profile.pin_boveda:
+            return Response({"error": "PIN no configurado. Configúralo en ajustes."}, status=400)
 
-        respuesta_real = decrypt_text(profile.respuesta_seguridad)
-
-        if respuesta_real and respuesta_real.lower().strip() == respuesta_usuario.lower().strip():
+        if check_password(pin_ingresado, profile.pin_boveda):
+            # Éxito: Reseteamos contador si estaba sucio
+            if profile.intentos_fallidos > 0:
+                profile.intentos_fallidos = 0
+                profile.save()
             return Response({"verificado": True})
 
-        return Response({"error": "Respuesta incorrecta"}, status=401)
+        # --- FALLO Y AUTODESTRUCCIÓN ---
+        profile.intentos_fallidos += 1
+        profile.save()
 
+        if profile.intentos_fallidos >= 10:
+            user.delete()
+            return Response(
+                {"error": "Límite de intentos excedido. Cuenta eliminada por seguridad."}, 
+                status=401
+            )
+
+        intentos_restantes = 10 - profile.intentos_fallidos
+        return Response(
+            {"error": f"PIN incorrecto. Te quedan {intentos_restantes} intentos."}, 
+            status=401
+        )
 
 class AdRewardView(APIView):
     permission_classes = [IsAuthenticated]
