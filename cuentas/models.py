@@ -133,21 +133,15 @@ class Account(models.Model):
         # Lógica: Si el usuario puso una URL del sitio, pero NO subió un icono propio
         if self.site_url and not self.site_icon_url:
             try:
-                # 1. Limpiamos la URL para obtener solo el dominio limpio
-                # Ej: "https://www.netflix.com/login" -> "www.netflix.com"
                 parsed = urlparse(self.site_url)
 
-                # Manejo robusto: Si el usuario puso "google.com" sin https://,
-                # urlparse lo pone en 'path', no en 'netloc'.
                 domain = parsed.netloc if parsed.netloc else parsed.path.split(
                     '/')[0]
 
                 if domain:
-                    # 2. Generamos la URL del servicio de iconos de Google en HD (128px)
                     self.site_icon_url = f"https://icons.duckduckgo.com/ip3/{domain}.ico"
 
             except Exception as e:
-                # Si algo falla, no rompemos el guardado, simplemente no ponemos icono
                 print(f"No se pudo generar el icono: {e}")
 
         # Guardamos normalmente
