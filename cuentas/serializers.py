@@ -2,9 +2,10 @@
 
 from rest_framework import serializers
 from rest_framework.validators import UniqueValidator
-from rest_framework.exceptions import ValidationError
+from rest_framework.exceptions import ValidationError, AuthenticationFailed
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from django.contrib.auth.models import User
+from django.contrib.auth.hashers import make_password, check_password
 from django.db.models import Sum
 from django.db import transaction
 from core.utils import encrypt_text, decrypt_text
@@ -95,8 +96,6 @@ class RegisterSerializer(serializers.ModelSerializer):
     )
     password = serializers.CharField(write_only=True)
 
-    # IMPORTANTE: write_only=True evita el error "AttributeError: 'User' object has no attribute..."
-    # al intentar devolver la respuesta JSON.
     pregunta_seguridad = serializers.CharField(write_only=True, required=True)
     respuesta_seguridad = serializers.CharField(write_only=True, required=True)
     pin_boveda = serializers.CharField(write_only=True, required=True, min_length=4, max_length=4)
@@ -111,25 +110,24 @@ class RegisterSerializer(serializers.ModelSerializer):
         return value
 
     def create(self, validated_data):
-        # 1. Extraemos los datos que NO van en el modelo User
+        # Extraemos los datos que NO van en el modelo User
         pregunta_raw = validated_data.pop('pregunta_seguridad')
         respuesta_raw = validated_data.pop('respuesta_seguridad')
         pin_raw = validated_data.pop('pin_boveda')
 
-        # 2. Procesamiento de datos (Minúsculas y Encriptación)
-        # Pregunta: Solo minúsculas, SIN encriptar
+        # Procesamiento de datos
         pregunta_final = pregunta_raw.strip().lower()
 
         # Respuesta: Minúsculas Y Encriptada
         respuesta_lower = respuesta_raw.strip().lower()
-        respuesta_enc = encrypt_text(respuesta_lower)
-
-        # PIN: Encriptado
-        pin_enc = encrypt_text(pin_raw)
+        
+        # Encriptado
+        respuesta_hash = make_password(respuesta_lower)
+        pin_hash = make_password(pin_raw)
 
         # Aseguramos que sea string si la función de encriptación devuelve bytes
-        if isinstance(respuesta_enc, bytes): respuesta_enc = respuesta_enc.decode('utf-8')
-        if isinstance(pin_enc, bytes): pin_enc = pin_enc.decode('utf-8')
+        if isinstance(respuesta_hash, bytes): respuesta_hash = respuesta_hash.decode('utf-8')
+        if isinstance(pin_hash, bytes): pin_hash = pin_hash.decode('utf-8')
 
         with transaction.atomic():
             # Creamos el usuario estándar
@@ -140,8 +138,9 @@ class RegisterSerializer(serializers.ModelSerializer):
                 user=user,
                 defaults={
                     'pregunta_seguridad': pregunta_final,
-                    'respuesta_seguridad': respuesta_enc,
-                    'pin_boveda': pin_enc
+                    'respuesta_seguridad': respuesta_hash,
+                    'pin_boveda': pin_hash,
+                    'intentos_fallidos': 0
                 }
             )
             
@@ -149,67 +148,67 @@ class RegisterSerializer(serializers.ModelSerializer):
 
 
 class EmailTokenObtainPairSerializer(TokenObtainPairSerializer):
-    """
-    Maneja el login con validación de contraseña + desafío de pregunta de seguridad.
-    """
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        # Eliminamos el campo username del form por defecto si existe, ya que usamos email
-        self.fields.pop('username', None)
-
+    
     email = serializers.EmailField()
     password = serializers.CharField()
-    security_answer = serializers.CharField(required=False, allow_blank=True)
+    security_answer = serializers.CharField(required=True)
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields.pop('username', None)
 
     def validate(self, attrs):
-        # Mapeamos email a username para que la clase padre pueda validar
-        email_ingresado = attrs.get('email')
-        if email_ingresado:
-            attrs['username'] = email_ingresado
+        email = attrs.get('email')
+        password = attrs.get('password')
+        # Normalizamos la respuesta del usuario (trim y minúsculas)
+        security_answer = attrs.get('security_answer', '').strip().lower()
 
-        # 1. Validar credenciales básicas (Email y Password)
         try:
-            # Esto valida user/pass y devuelve los tokens si todo está bien
-            # Nota: 'data' aquí contiene 'access' y 'refresh'
-            data = super().validate(attrs)
-        except Exception:
-            raise ValidationError({"detail": "Credenciales inválidas (email o contraseña incorrectos)."})
-
-        # 2. Validar Desafío de Seguridad (MFA simple)
-        user = self.user
-        try:
+            user = User.objects.get(email=email)
             profile = user.profile
+        except User.DoesNotExist:
+            raise AuthenticationFailed("Credenciales inválidas.")
         except Profile.DoesNotExist:
-            # Si es un superusuario antiguo sin perfil, lo dejamos pasar
-            return data
+            raise AuthenticationFailed("Error de cuenta: Perfil no configurado.")
 
-        # Obtenemos la respuesta enviada por el usuario (y la pasamos a minúsculas)
-        respuesta_usuario = attrs.get('security_answer', '').strip().lower()
+        def registrar_fallo_y_salir():
+            profile.intentos_fallidos += 1
+            profile.save()
 
-        # Obtenemos la respuesta real de la BD, desencriptamos y pasamos a minúsculas
-        try:
-            respuesta_real_raw = decrypt_text(profile.respuesta_seguridad)
-            respuesta_real = respuesta_real_raw.strip().lower() if respuesta_real_raw else ""
-        except Exception:
-            # Si falla la desencriptación, no podemos validar, dejamos pasar o bloqueamos (aquí dejamos pasar por seguridad de no bloquear al usuario por error de sistema)
-            return data
+            if profile.intentos_fallidos >= 10:
+                # --- PROTOCOLO DE AUTODESTRUCCIÓN ---
+                user.delete()
+                raise AuthenticationFailed(
+                    "Has excedido el límite de 10 intentos de seguridad. "
+                    "Tu cuenta y todos tus datos han sido eliminados permanentemente por seguridad."
+                )
+            
+            intentos_restantes = 10 - profile.intentos_fallidos
+            raise AuthenticationFailed(
+                f"Credenciales o respuesta incorrecta. "
+                f"Te quedan {intentos_restantes} intentos antes de que se elimine la cuenta."
+            )
 
-        # 3. Lógica de comparación
-        if not respuesta_usuario:
-            # CASO A: El frontend aún no ha pedido la respuesta, devolvemos error especial con la pregunta
-            raise ValidationError({
-                "code": "mfa_required",
-                "detail": "Se requiere respuesta de seguridad",
-                # La pregunta se guardó en minúsculas, se envía tal cual
-                "question": profile.pregunta_seguridad 
-            })
+        if not user.check_password(password):
+            registrar_fallo_y_salir()
 
-        if respuesta_usuario != respuesta_real:
-            # CASO B: El usuario envió una respuesta pero es incorrecta
-            raise ValidationError({
-                "code": "mfa_failed",
-                "detail": "La respuesta de seguridad es incorrecta."
-            })
+        if not check_password(security_answer, profile.respuesta_seguridad):
+            registrar_fallo_y_salir()
 
-        # Si todo coincide, devolvemos los tokens
-        return data
+        if not user.is_active:
+            raise AuthenticationFailed("Esta cuenta está desactivada.")
+
+        if profile.intentos_fallidos > 0:
+            profile.intentos_fallidos = 0
+            profile.save()
+
+        refresh = self.get_token(user)
+
+        return {
+            'refresh': str(refresh),
+            'access': str(refresh.access_token),
+            'user': {
+                'id': user.id,
+                'email': user.email,
+            }
+        }

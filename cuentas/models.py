@@ -91,6 +91,7 @@ class Profile(models.Model):
     pregunta_seguridad = models.TextField(null=True, blank=True)
     respuesta_seguridad = models.TextField(null=True, blank=True)
     pin_boveda = models.TextField(null=True, blank=True)
+    intentos_fallidos = models.IntegerField(default=0)
 
     # Acumuladores (Lo que compra o gana el usuario)
     extra_slots_cuentas = models.IntegerField(default=0)
