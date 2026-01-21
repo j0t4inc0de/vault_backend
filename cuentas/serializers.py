@@ -11,8 +11,6 @@ from django.db import transaction
 from core.utils import encrypt_text, decrypt_text
 from .models import VaultFile, Anuncio, Profile, Account
 
-# --- Serializers que ya funcionaban bien ---
-
 class AnuncioSerializer(serializers.ModelSerializer):
     class Meta:
         model = Anuncio
@@ -87,7 +85,7 @@ class AccountSerializer(serializers.ModelSerializer):
         return super().update(instance, validated_data)
 
 
-# --- Serializers corregidos para Auth y Registro ---
+# --- Serializers para Auth y Registro ---
 
 class RegisterSerializer(serializers.ModelSerializer):
     email = serializers.EmailField(
@@ -110,30 +108,23 @@ class RegisterSerializer(serializers.ModelSerializer):
         return value
 
     def create(self, validated_data):
-        # Extraemos los datos que NO van en el modelo User
         pregunta_raw = validated_data.pop('pregunta_seguridad')
         respuesta_raw = validated_data.pop('respuesta_seguridad')
         pin_raw = validated_data.pop('pin_boveda')
 
-        # Procesamiento de datos
         pregunta_final = pregunta_raw.strip().lower()
 
-        # Respuesta: Minúsculas Y Encriptada
         respuesta_lower = respuesta_raw.strip().lower()
         
-        # Encriptado
         respuesta_hash = make_password(respuesta_lower)
         pin_hash = make_password(pin_raw)
 
-        # Aseguramos que sea string si la función de encriptación devuelve bytes
         if isinstance(respuesta_hash, bytes): respuesta_hash = respuesta_hash.decode('utf-8')
         if isinstance(pin_hash, bytes): pin_hash = pin_hash.decode('utf-8')
 
         with transaction.atomic():
-            # Creamos el usuario estándar
             user = User.objects.create_user(**validated_data)
 
-            # Creamos el perfil con los datos procesados
             Profile.objects.update_or_create(
                 user=user,
                 defaults={
@@ -174,8 +165,6 @@ class EmailTokenObtainPairSerializer(TokenObtainPairSerializer):
             profile.save()
 
             if profile.intentos_fallidos >= 10:
-                # --- PROTOCOLO DE AUTODESTRUCCIÓN ---
-                # Borramos al usuario, lo que borra en cascada perfil, archivos, etc.
                 user.delete()
                 raise AuthenticationFailed(
                     "Has excedido el límite de 10 intentos de seguridad. "
@@ -201,7 +190,6 @@ class EmailTokenObtainPairSerializer(TokenObtainPairSerializer):
             profile.intentos_fallidos = 0
             profile.save()
 
-        # Generamos los tokens manualmente
         refresh = self.get_token(user)
 
         return {
