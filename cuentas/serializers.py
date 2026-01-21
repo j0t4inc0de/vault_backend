@@ -4,11 +4,12 @@ from rest_framework import serializers
 from rest_framework.validators import UniqueValidator
 from rest_framework.exceptions import ValidationError, AuthenticationFailed
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
+from django.core.files.base import ContentFile
 from django.contrib.auth.models import User
 from django.contrib.auth.hashers import make_password, check_password
 from django.db.models import Sum
 from django.db import transaction
-from core.utils import encrypt_text, decrypt_text
+from core.utils import encrypt_text, decrypt_text, encrypt_bytes
 from .models import VaultFile, Anuncio, Profile, Account
 
 class AnuncioSerializer(serializers.ModelSerializer):
@@ -25,11 +26,11 @@ class VaultFileSerializer(serializers.ModelSerializer):
 
     def validate_file(self, value):
         user = self.context['request'].user
-        # Manejo seguro en caso de que el perfil no exista aún
-        try:
-            profile = user.profile
-        except AttributeError:
-            raise serializers.ValidationError("El usuario no tiene un perfil asociado.")
+        LIMIT_MB = 50
+        if value.size > LIMIT_MB * 1024 * 1024:
+            raise serializers.ValidationError(f"El archivo excede el límite de {LIMIT_MB}MB para cifrado seguro.")
+
+        profile = user.profile
 
         total_limit_gb = profile.plan.limite_gb_base + profile.extra_gb_almacenamiento
         total_limit_bytes = total_limit_gb * 1024 * 1024 * 1024
@@ -42,6 +43,22 @@ class VaultFileSerializer(serializers.ModelSerializer):
                 f"Espacio insuficiente. Tienes {total_limit_gb}GB y estás intentando superar el límite.")
 
         return value
+    
+    def create(self, validated_data):
+        uploaded_file = validated_data.pop('file')
+        user = self.context['request'].user
+
+        file_bytes = uploaded_file.read()
+        encrypted_bytes = encrypt_bytes(file_bytes)
+
+        encrypted_file = ContentFile(encrypted_bytes, name=f"{uploaded_file.name}.enc")
+
+        return VaultFile.objects.create(
+            user=user,
+            file=encrypted_file,
+            name=uploaded_file.name,
+            size_bytes=uploaded_file.size
+        )
 
 
 class AccountSerializer(serializers.ModelSerializer):
