@@ -31,8 +31,12 @@ class VaultFileSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(f"El archivo excede el límite de {LIMIT_MB}MB para cifrado seguro.")
 
         profile = user.profile
-
-        total_limit_gb = profile.plan.limite_gb_base + profile.extra_gb_almacenamiento
+        if profile.plan:
+            base_gb = profile.plan.limite_gb_base
+        else:
+            base_gb = 0
+            
+        total_limit_gb = base_gb + profile.extra_gb_almacenamiento
         total_limit_bytes = total_limit_gb * 1024 * 1024 * 1024
 
         used_bytes = VaultFile.objects.filter(user=user).aggregate(
