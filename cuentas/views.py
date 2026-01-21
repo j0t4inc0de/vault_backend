@@ -6,6 +6,7 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework.parsers import MultiPartParser, FormParser
+from rest_framework.decorators import action
 from .serializers import EmailTokenObtainPairSerializer, VaultFileSerializer, AnuncioSerializer
 from .models import Account, VaultFile, PlanConfig, PackConfig, Anuncio
 from .serializers import AccountSerializer, RegisterSerializer
@@ -378,6 +379,42 @@ class VaultFileViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
+
+    @action(detail=True, methods=['get'])
+    def download(self, request, pk=None):
+        """
+        Endpoint para descargar y descifrar el archivo.
+        Uso: GET /api/files/{id}/download/
+        """
+        # get_object() ya asegura que el archivo pertenezca al usuario autenticado
+        vault_file = self.get_object() 
+        
+        try:
+            # 1. Leer el contenido cifrado (.enc) desde el disco
+            with vault_file.file.open('rb') as f:
+                encrypted_data = f.read()
+            
+            # 2. Descifrar los bytes usando la llave maestra
+            decrypted_data = decrypt_bytes(encrypted_data)
+
+            # 3. Determinar el tipo de contenido original (image/png, application/pdf, etc.)
+            content_type, _ = mimetypes.guess_type(vault_file.name)
+            if not content_type:
+                content_type = 'application/octet-stream'
+
+            # 4. Devolver la respuesta con el archivo original descifrado
+            response = HttpResponse(decrypted_data, content_type=content_type)
+            # Se usa el nombre original guardado en el modelo para la descarga
+            response['Content-Disposition'] = f'attachment; filename="{vault_file.name}"'
+            
+            return response
+
+        except Exception as e:
+            print(f"Error al descifrar archivo {pk}: {e}")
+            return Response(
+                {"error": "No se pudo procesar el archivo o la llave es incorrecta."}, 
+                status=500
+            )
 
 
 class EmailTokenObtainPairView(TokenObtainPairView):
