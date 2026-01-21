@@ -22,7 +22,7 @@ class VaultFileSerializer(serializers.ModelSerializer):
     class Meta:
         model = VaultFile
         fields = ['id', 'name', 'file', 'size_bytes', 'created_at']
-        read_only_fields = ['size_bytes', 'created_at']
+        read_only_fields = ['size_bytes', 'created_at', 'name']
 
     def validate_file(self, value):
         user = self.context['request'].user
