@@ -24,9 +24,9 @@ def decrypt_text(encrypted_text):
         return "Error al desencriptar"
     
 def encrypt_bytes(data_bytes):
-    f = Fernet(settings.ENCRYPTION_KEY)
+    f = get_fernet() # Ahora: Usa la misma lógica que el resto
     return f.encrypt(data_bytes)
 
 def decrypt_bytes(encrypted_data_bytes):
-    f = Fernet(settings.ENCRYPTION_KEY)
+    f = get_fernet() # Ahora: Usa la misma lógica que el resto
     return f.decrypt(encrypted_data_bytes)
