@@ -10,7 +10,7 @@ from django.contrib.auth.hashers import make_password, check_password
 from django.db.models import Sum
 from django.db import transaction
 from core.utils import encrypt_text, decrypt_text, encrypt_bytes
-from .models import VaultFile, Anuncio, Profile, Account
+from .models import VaultFile, Anuncio, Profile, Account, PlanConfig
 
 class AnuncioSerializer(serializers.ModelSerializer):
     class Meta:
@@ -144,18 +144,30 @@ class RegisterSerializer(serializers.ModelSerializer):
         if isinstance(pin_hash, bytes): pin_hash = pin_hash.decode('utf-8')
 
         with transaction.atomic():
-            user = User.objects.create_user(**validated_data)
+                    user = User.objects.create_user(**validated_data)
 
-            Profile.objects.update_or_create(
-                user=user,
-                defaults={
-                    'pregunta_seguridad': pregunta_final,
-                    'respuesta_seguridad': respuesta_hash,
-                    'pin_boveda': pin_hash,
-                    'intentos_fallidos': 0
-                }
-            )
-            
+                    plan_free, _ = PlanConfig.objects.get_or_create(
+                        nombre="Plan Gratuito",
+                        defaults={
+                            "precio_mensual": 0,
+                            "slots_cuentas_base": 10,
+                            "limite_gb_base": 2.0,
+                            "slots_notas_base": 5,
+                            "slots_recordatorios_base": 1
+                        }
+                    )
+
+                    Profile.objects.update_or_create(
+                        user=user,
+                        defaults={
+                            'pregunta_seguridad': pregunta_final,
+                            'respuesta_seguridad': respuesta_hash,
+                            'pin_boveda': pin_hash,
+                            'intentos_fallidos': 0,
+                            'plan': plan_free
+                        }
+                    )
+                    
         return user
 
 
