@@ -203,10 +203,7 @@ class CreatePaymentView(APIView):
             })
 
         except Exception as e:
-            # ESTA ES LA PARTE MÁGICA:
-            # Imprime el error en los logs
             traceback.print_exc()
-            # Y también te lo devuelve en Postman para que lo leas
             return Response({
                 "error_interno": str(e),
                 "tipo_error": type(e).__name__
@@ -215,7 +212,7 @@ class CreatePaymentView(APIView):
 
 class MercadoPagoWebhookView(APIView):
     permission_classes = [AllowAny]
-    authentication_classes = []  # No requerimos token, MP es quien llama
+    authentication_classes = []
 
     def post(self, request):
         topic = request.data.get('topic') or request.data.get('type')
@@ -225,7 +222,6 @@ class MercadoPagoWebhookView(APIView):
 
         if topic == 'payment' and mp_id:
             try:
-                # 1. Consultar a MP el estado real del pago
                 sdk = mercadopago.SDK(settings.MERCADOPAGO_ACCESS_TOKEN)
                 payment_info = sdk.payment().get(mp_id)
                 payment = payment_info.get('response', {})
@@ -233,7 +229,6 @@ class MercadoPagoWebhookView(APIView):
                 status = payment.get('status')
 
                 if status == 'approved':
-                    # 2. Leer la metadata que guardamos al crear el pago
                     metadata = payment.get('metadata', {})
                     user_id = metadata.get('user_id')
                     purchase_type = metadata.get(
@@ -243,7 +238,6 @@ class MercadoPagoWebhookView(APIView):
                     print(
                         f"✅ Pago Aprobado. Usuario: {user_id}, Tipo: {purchase_type}, Producto: {product_id}")
 
-                    # 3. Procesar la entrega del producto
                     if user_id and purchase_type and product_id:
                         self.activar_producto(
                             user_id, purchase_type, product_id)
@@ -259,7 +253,7 @@ class MercadoPagoWebhookView(APIView):
     def activar_producto(self, user_id, tipo, product_id):
         try:
             user = User.objects.get(id=user_id)
-            profile = user.profile  # Accedemos al perfil (OneToOne)
+            profile = user.profile
 
             if tipo == 'plan':
                 # CAMBIO DE PLAN (Suscripción)
@@ -320,7 +314,6 @@ class SecurityView(APIView):
             return Response({"error": "PIN no configurado. Configúralo en ajustes."}, status=400)
 
         if check_password(pin_ingresado, profile.pin_boveda):
-            # Éxito: Reseteamos contador si estaba sucio
             if profile.intentos_fallidos > 0:
                 profile.intentos_fallidos = 0
                 profile.save()
@@ -376,10 +369,8 @@ class AdRewardView(APIView):
 
 
 class VaultFileViewSet(viewsets.ModelViewSet):
-    # Podrías agregar el permiso de 'Freezing' aquí también si quieres bloquear subidas a morosos
     permission_classes = [IsAuthenticated]
     serializer_class = VaultFileSerializer
-    # Necesario para subir archivos
     parser_classes = (MultiPartParser, FormParser)
 
     def get_queryset(self):
@@ -401,7 +392,6 @@ class AccountViewSet(viewsets.ModelViewSet):
     search_fields = ['site_name', 'site_url', 'email']
 
     def get_queryset(self):
-        # El usuario siempre puede VER todas sus cuentas, incluso las congeladas.
         return Account.objects.filter(user=self.request.user).order_by('-created_at')
 
     def perform_create(self, serializer):
@@ -428,7 +418,6 @@ Juan Erices.
         remitente = settings.EMAIL_HOST_USER
         destinatario = [user.email]
 
-        # 3. Enviar el correo
         try:
             print(f"Intentando enviar correo a {user.email}...")
             send_mail(asunto, mensaje, remitente,
