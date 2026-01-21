@@ -8,14 +8,19 @@ if not VPS_IP:
 
 ALLOWED_HOSTS = [VPS_IP, 'localhost', '127.0.0.1']
 
-CSRF_TRUSTED_ORIGINS = [f'http://{VPS_IP}:8090']
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "capacitor://localhost",
+    "http://localhost",
+    f"http://{VPS_IP}:8091", 
+]
+
+CSRF_TRUSTED_ORIGINS = [
+    f'http://{VPS_IP}:8090',
+    # También es vital agregarlo aquí para permitir el POST del login
+    f"http://{VPS_IP}:8091", 
+]
 
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
-
-CORS_ALLOWED_ORIGINS = [
-    "http://localhost:5173",      # Tu Vue en desarrollo (Vite)
-    "http://127.0.0.1:5173",
-    "capacitor://localhost",      # Para la App Móvil (Android/iOS)
-    "http://localhost",           # A veces requerido por Android
-]
