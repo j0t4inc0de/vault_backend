@@ -16,7 +16,9 @@ from django.contrib.auth.hashers import make_password, check_password
 from django.core.mail import send_mail
 from django.conf import settings
 from django.utils import timezone
-from core.utils import encrypt_text, decrypt_text
+from django.http import HttpResponse
+from core.utils import encrypt_text, decrypt_text, decrypt_bytes
+import mimetypes
 import mercadopago
 import traceback
 
