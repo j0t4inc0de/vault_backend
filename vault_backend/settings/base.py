@@ -15,13 +15,13 @@ MERCADOPAGO_ACCESS_TOKEN = os.getenv('MERCADOPAGO_ACCESS_TOKEN')
 SIMPLE_JWT = {
     # TIEMPO DE USO (30 min)
     # El usuario puede trabajar tranquilo 30 minutos sin interrupciones.
-    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=30),
+    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=2),
 
     # TIEMPO DE HOLGURA (30 min + un poco extra)
     # Si el usuario deja de hacer clicks por más de 40 minutos, 
     # tanto el Access como el Refresh habrán muerto.
     # Al volver el sistema le dirá "Token Inválido" -> Login forzoso.
-    'REFRESH_TOKEN_LIFETIME': timedelta(minutes=40),
+    'REFRESH_TOKEN_LIFETIME': timedelta(minutes=5),
 
     'ROTATE_REFRESH_TOKENS': True,
     'BLACKLIST_AFTER_ROTATION': True,
