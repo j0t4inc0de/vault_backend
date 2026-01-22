@@ -26,8 +26,8 @@ urlpatterns = [
 
     path("api/auth/login/", 
          EmailTokenObtainPairView.as_view()),
-    path("api/auth/refresh/", 
-         TokenRefreshView.as_view()),
+    path("api/token/refresh/", 
+         TokenRefreshView.as_view(), name='token_refresh'),
     path('api/auth/register/', 
          RegisterView.as_view(), name='auth_register'),
     
