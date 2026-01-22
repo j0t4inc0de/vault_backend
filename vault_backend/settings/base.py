@@ -2,6 +2,7 @@
 from pathlib import Path
 import os
 from dotenv import load_dotenv
+from datetime import timedelta
 
 load_dotenv()
 
@@ -10,6 +11,25 @@ BASE_DIR = Path(__file__).resolve().parent.parent.parent
 SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "insecure-dev-key")
 ENCRYPTION_KEY = os.getenv('ENCRYPTION_KEY')
 MERCADOPAGO_ACCESS_TOKEN = os.getenv('MERCADOPAGO_ACCESS_TOKEN')
+
+SIMPLE_JWT = {
+    # TIEMPO DE USO (30 min)
+    # El usuario puede trabajar tranquilo 30 minutos sin interrupciones.
+    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=30),
+
+    # TIEMPO DE HOLGURA (30 min + un poco extra)
+    # Si el usuario deja de hacer clicks por más de 40 minutos, 
+    # tanto el Access como el Refresh habrán muerto.
+    # Al volver el sistema le dirá "Token Inválido" -> Login forzoso.
+    'REFRESH_TOKEN_LIFETIME': timedelta(minutes=40),
+
+    'ROTATE_REFRESH_TOKENS': True,
+    'BLACKLIST_AFTER_ROTATION': True,
+
+    'ALGORITHM': 'HS256',
+    'SIGNING_KEY': SECRET_KEY,
+    'AUTH_HEADER_TYPES': ('Bearer',),
+}
 
 INSTALLED_APPS = [
     "django.contrib.admin",
