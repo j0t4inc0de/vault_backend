@@ -15,7 +15,7 @@ MERCADOPAGO_ACCESS_TOKEN = os.getenv('MERCADOPAGO_ACCESS_TOKEN')
 SIMPLE_JWT = {
     # TIEMPO DE USO (30 min)
     # El usuario puede trabajar tranquilo 30 minutos sin interrupciones.
-    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=30 ),
+    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=30),
 
     # TIEMPO DE HOLGURA (30 min + un poco extra)
     # Si el usuario deja de hacer clicks por más de 40 minutos, 
