@@ -21,7 +21,7 @@ SIMPLE_JWT = {
     # Si el usuario deja de hacer clicks por más de 40 minutos, 
     # tanto el Access como el Refresh habrán muerto.
     # Al volver el sistema le dirá "Token Inválido" -> Login forzoso.
-    'REFRESH_TOKEN_LIFETIME': timedelta(minutes=5),
+    'REFRESH_TOKEN_LIFETIME': timedelta(minutes=4),
 
     'ROTATE_REFRESH_TOKENS': True,
     'BLACKLIST_AFTER_ROTATION': True,
