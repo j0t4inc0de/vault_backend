@@ -39,6 +39,22 @@ class ProfileAdmin(admin.ModelAdmin):
                     'total_anuncios_vistos', 'fecha_registro')
     list_filter = ('plan', 'fecha_registro')
     search_fields = ('user__username', 'user__email')
+    
+    def uso_almacenamiento(self, obj):
+        # Sumar bytes de todos los archivos del usuario
+        used_bytes = VaultFile.objects.filter(user=obj.user).aggregate(
+            Sum('size_bytes'))['size_bytes__sum'] or 0
+        
+        # Convertir a MB para visualización
+        used_mb = round(used_bytes / (1024 * 1024), 2)
+
+        # Calcular límite total (Plan Base + Extras)
+        base_gb = obj.plan.limite_gb_base if obj.plan else 0
+        total_gb = base_gb + obj.extra_gb_almacenamiento
+        
+        return f"{used_mb} MB / {total_gb} GB"
+    
+    uso_almacenamiento.short_description = "Almacenamiento (Usado / Total)"
 
 
 class Dashboard(Profile):
