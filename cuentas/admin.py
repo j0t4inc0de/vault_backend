@@ -1,15 +1,17 @@
 from django.contrib import admin
 from django.db.models import Sum, Count
 from django.utils.timezone import now
-from .models import Account, Profile, PlanConfig, PackConfig, Anuncio
+from .models import Account, Profile, PlanConfig, PackConfig, Anuncio, VaultFile
+
 
 @admin.register(Anuncio)
 class AnuncioAdmin(admin.ModelAdmin):
-    list_display = ('id', 'titulo', 'creado_en', 'activo') 
-    
-    list_filter = ('creado_en', 'activo') 
-    
+    list_display = ('id', 'titulo', 'creado_en', 'activo')
+
+    list_filter = ('creado_en', 'activo')
+
     search_fields = ('titulo', 'mensaje')
+
 
 @admin.register(PlanConfig)
 class PlanConfigAdmin(admin.ModelAdmin):
@@ -33,7 +35,7 @@ class ProfileInline(admin.StackedInline):
 
 @admin.register(Profile)
 class ProfileAdmin(admin.ModelAdmin):
-    list_display = ('user', 'plan', 'total_cuentas_permitidas',
+    list_display = ('user', 'plan', 'uso_almacenamiento', 'total_cuentas_permitidas',
                     'total_anuncios_vistos', 'fecha_registro')
     list_filter = ('plan', 'fecha_registro')
     search_fields = ('user__username', 'user__email')
@@ -42,8 +44,8 @@ class ProfileAdmin(admin.ModelAdmin):
 class Dashboard(Profile):
     class Meta:
         proxy = True
-        verbose_name = '📊 Métrica de Negocio'
-        verbose_name_plural = '📊 DASHBOARD Y MÉTRICAS'
+        verbose_name = 'Métrica de Negocio'
+        verbose_name_plural = 'DASHBOARD Y MÉTRICAS'
 
 
 @admin.register(Dashboard)
@@ -68,6 +70,17 @@ class DashboardAdmin(admin.ModelAdmin):
         ingresos_mrr = Profile.objects.filter(plan__isnull=False).aggregate(
             Sum('plan__precio_mensual'))['plan__precio_mensual__sum'] or 0
 
+        total_bytes_app = VaultFile.objects.aggregate(
+            Sum('size_bytes'))['size_bytes__sum'] or 0
+
+        # Convertir a GB
+        total_gb_app = total_bytes_app / (1024 * 1024 * 1024)
+        if total_gb_app < 1:
+            # Si es menos de 1 GB, mostrar en MB
+            total_storage_display = f"{total_bytes_app / (1024 * 1024):.2f} MB"
+        else:
+            total_storage_display = f"{total_gb_app:.2f} GB"
+
         # Enviamos los datos al Dashboard
         extra_context = extra_context or {}
         extra_context['summary'] = {
@@ -77,6 +90,7 @@ class DashboardAdmin(admin.ModelAdmin):
             'nuevos': nuevos_mes,
             'ads': total_ads,
             'ingresos': f"${ingresos_mrr:,.0f} CLP",
+            'storage': total_storage_display
         }
 
         return super().changelist_view(request, extra_context=extra_context)
