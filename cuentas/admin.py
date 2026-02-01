@@ -97,6 +97,19 @@ class DashboardAdmin(admin.ModelAdmin):
         else:
             total_storage_display = f"{total_gb_app:.2f} GB"
 
+        # Tasa de Conversion a Premium
+        conversion_rate = 0
+        if total_usuarios > 0:
+            conversion_rate = (usuarios_premium / total_usuarios) * 100
+
+        # Demanda de Extras
+        extras_stats = Profile.objects.aggregate(
+            total_slots=Sum('extra_slots_cuentas'),
+            total_gb=Sum('extra_gb_almacenamiento')
+        )
+        extra_slots = extras_stats['total_slots'] or 0
+        extra_gb = extras_stats['total_gb'] or 0
+
         # Enviamos los datos al Dashboard
         extra_context = extra_context or {}
         extra_context['summary'] = {
@@ -106,7 +119,10 @@ class DashboardAdmin(admin.ModelAdmin):
             'nuevos': nuevos_mes,
             'ads': total_ads,
             'ingresos': f"${ingresos_mrr:,.0f} CLP",
-            'storage': total_storage_display
+            'storage': total_storage_display,
+            'conversion': f"{conversion_rate:.1f}%",
+            'extra_slots': extra_slots,
+            'extra_gb': round(extra_gb, 1),
         }
 
         return super().changelist_view(request, extra_context=extra_context)
