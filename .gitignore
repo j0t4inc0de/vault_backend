@@ -1,3 +1,31 @@
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtualenv
+venv/
+.venv/
+env/
 /.venv
-.env
+# Django
+staticfiles/
+media/
 db.sqlite3
+
+# Environment
+.env
+.env.*
+*.key
+*.pem
+*.pub
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
+
+# Docker
+*.log
