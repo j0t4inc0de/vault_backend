@@ -126,15 +126,25 @@ class UserProfileView(APIView):
         })
         
     def patch(self, request):
-        profile = request.user.profile
-        new_theme = request.data.get('theme')
+            # --- LOG DE DEBUG (Borrar al terminar) ---
+            print(f"\n📨 PATCH RECIBIDO. Usuario: {request.user.username}")
+            print(f"📦 Datos: {request.data}")
+            # ----------------------------------------
 
-        if new_theme in ['light', 'dark']:
-            profile.theme = new_theme
-            profile.save()
-            return Response({"status": "Tema actualizado", "theme": profile.theme})
-        
-        return Response({"error": "Tema inválido"}, status=400)
+            profile = request.user.profile
+            new_theme = request.data.get('theme')
+
+            if new_theme in ['light', 'dark']:
+                profile.theme = new_theme
+                profile.save()
+                
+                # --- CONFIRMACIÓN ---
+                print(f"✅ Tema guardado en DB: {profile.theme}\n")
+                
+                return Response({"status": "Tema actualizado", "theme": profile.theme})
+            
+            print("❌ Error: Tema inválido o no enviado")
+            return Response({"error": "Tema inválido"}, status=400)
 
 
 class CreatePaymentView(APIView):
