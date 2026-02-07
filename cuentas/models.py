@@ -86,7 +86,7 @@ class Profile(models.Model):
         User, on_delete=models.CASCADE, related_name="profile")
     plan = models.ForeignKey(
         PlanConfig, on_delete=models.SET_NULL, null=True, blank=True)
-
+    theme = models.CharField(max_length=10, default='light', help_text="Preferencia de tema: 'light' o 'dark'")
     # Seguridad
     pregunta_seguridad = models.TextField(null=True, blank=True)
     respuesta_seguridad = models.TextField(null=True, blank=True)
