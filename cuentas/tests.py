@@ -1,3 +1,3 @@
 from django.test import TestCase
 
-# Create your tests here.
+# Se devolvió a un commit debido a una inconsistencia con los datos
