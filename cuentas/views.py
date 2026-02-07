@@ -54,6 +54,7 @@ class UserProfileView(APIView):
         # Valores por defecto
         base_gb = 0
         base_cuentas = 10
+        base_notas = 10  # Valor por defecto para notas
         nombre_plan = "Plan Gratuito"
         es_premium = False
 
@@ -61,20 +62,26 @@ class UserProfileView(APIView):
             nombre_plan = profile.plan.nombre
             es_premium = profile.plan.sin_anuncios
 
-            # --- 🚀 CORRECCIÓN: USAMOS LOS NOMBRES REALES DEL LOG ---
+            # --- USAMOS LOS NOMBRES REALES DEL LOG ---
             base_gb = getattr(profile.plan, 'limite_gb_base', 0)
             base_cuentas = getattr(profile.plan, 'slots_cuentas_base', 10)
+            base_notas = getattr(profile.plan, 'slots_notas_base', 10)
 
         # --- SUMAMOS LOS EXTRAS (Packs comprados) ---
         total_gb = base_gb + getattr(profile, 'extra_gb_almacenamiento', 0)
-        total_cuentas = base_cuentas + \
-            getattr(profile, 'extra_slots_cuentas', 0)
+        total_cuentas = base_cuentas + getattr(profile, 'extra_slots_cuentas', 0)
+        total_notas = base_notas + getattr(profile, 'extra_slots_notas', 0)
 
         # --- CÁLCULO DE USO ---
         cuentas_usadas = Account.objects.filter(user=user).count()
 
-        archivos = VaultFile.objects.filter(user=user)
-        total_bytes = Sum(a.file.size for a in archivos if a.file)
+        # --- 🚀 CORRECCIÓN CRÍTICA AQUÍ ---
+        # Usamos aggregate para pedirle a la Base de Datos que sume el campo 'size_bytes'.
+        # Esto NO toca los archivos físicos, por lo que es rápido y no falla si faltan archivos.
+        total_bytes = VaultFile.objects.filter(user=user).aggregate(
+            total=Sum('size_bytes')
+        )['total'] or 0
+        
         usado_mb = round(total_bytes / (1024 * 1024), 2)
 
         # Calcular porcentaje
@@ -102,13 +109,11 @@ class UserProfileView(APIView):
                 },
                 "almacenamiento": {
                     "usado_mb": usado_mb,
-                    # Ahora saldrá "5.0" (o más si tienes extras)
                     "total_gb": total_gb,
                     "porcentaje": porcentaje_storage
                 },
                 "notas": {
-                    # También vi este nombre en tu log: 'slots_notas_base'
-                    "total": getattr(profile.plan, 'slots_notas_base', 10) if profile.plan else 10
+                    "total": total_notas
                 }
             },
             "gamificacion": {
