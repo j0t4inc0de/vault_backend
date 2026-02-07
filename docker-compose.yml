@@ -8,6 +8,7 @@ services:
     command: gunicorn --bind 0.0.0.0:8000 vault_backend.wsgi:application
     volumes:
       - .:/app
+      - ./media:/app/media
     ports:
       - "8090:8000"
     env_file:
