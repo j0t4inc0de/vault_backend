@@ -17,6 +17,7 @@ from django.core.mail import send_mail
 from django.conf import settings
 from django.utils import timezone
 from django.http import HttpResponse
+from django.db.models import Sum
 from core.utils import encrypt_text, decrypt_text, decrypt_bytes
 import mimetypes
 import mercadopago
@@ -73,7 +74,7 @@ class UserProfileView(APIView):
         cuentas_usadas = Account.objects.filter(user=user).count()
 
         archivos = VaultFile.objects.filter(user=user)
-        total_bytes = sum(a.file.size for a in archivos if a.file)
+        total_bytes = Sum(a.file.size for a in archivos if a.file)
         usado_mb = round(total_bytes / (1024 * 1024), 2)
 
         # Calcular porcentaje
