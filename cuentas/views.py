@@ -97,6 +97,9 @@ class UserProfileView(APIView):
                 "email": user.email,
                 "fecha_unio": user.date_joined.strftime("%Y-%m-%d"),
             },
+            "preferencias": {
+                "theme": user.profile.theme
+            },
             "plan": {
                 "nombre": nombre_plan,
                 "es_premium": es_premium,
@@ -121,6 +124,17 @@ class UserProfileView(APIView):
                 "progreso_recompensa": profile.total_anuncios_vistos % 10,
             }
         })
+        
+    def patch(self, request):
+        profile = request.user.profile
+        new_theme = request.data.get('theme')
+
+        if new_theme in ['light', 'dark']:
+            profile.theme = new_theme
+            profile.save()
+            return Response({"status": "Tema actualizado", "theme": profile.theme})
+        
+        return Response({"error": "Tema inválido"}, status=400)
 
 
 class CreatePaymentView(APIView):
